@@ -1,0 +1,373 @@
+{
+  "nodes": [
+    {
+      "id": "orgcivic00112233445566778899aabbccdd",
+      "class": "Organisation",
+      "properties": {
+        "name": "Civic Development Council",
+        "type": "nonprofit",
+        "jurisdiction": "UK",
+        "disbandedOn": "2021-09-30"
+      }
+    },
+    {
+      "id": "orgharbor112233445566778899aabbccddeeff",
+      "class": "Organisation",
+      "properties": {
+        "name": "Harbor Union",
+        "type": "association",
+        "jurisdiction": "UK"
+      }
+    },
+    {
+      "id": "orgriverlight0011aabbccddeeff2233445566",
+      "class": "Organisation",
+      "properties": {
+        "name": "Riverlight Initiative",
+        "type": "community group",
+        "jurisdiction": "UK"
+      }
+    },
+    {
+      "id": "wingcivic2233445566778899aabbccddeeff00",
+      "class": "PoliticalWing",
+      "properties": {
+        "name": "Community Liaison Wing",
+        "ideology": "civic engagement"
+      }
+    },
+    {
+      "id": "personalex0011b2c3d4e5f60718293a4b5c6d",
+      "class": "Person",
+      "properties": {
+        "fullName": "Alex Parker",
+        "dateOfBirth": "1987-03-14",
+        "nationality": "British"
+      }
+    },
+    {
+      "id": "personjordan22b2c3d4e5f60718293a4b5c6d7",
+      "class": "Person",
+      "properties": {
+        "fullName": "Jordan Lee",
+        "dateOfBirth": "1991-08-02",
+        "nationality": "British"
+      }
+    },
+    {
+      "id": "personmorgan33b2c3d4e5f60718293a4b5c6d",
+      "class": "Person",
+      "properties": {
+        "fullName": "Morgan Shah",
+        "dateOfBirth": "1983-11-23",
+        "nationality": "British"
+      }
+    },
+    {
+      "id": "rolelead00112233445566778899aabbccdd",
+      "class": "Role",
+      "properties": {
+        "name": "Program Lead",
+        "description": "Oversees campaign delivery."
+      }
+    },
+    {
+      "id": "rolecoord00112233445566778899aabbccdd",
+      "class": "Role",
+      "properties": {
+        "name": "Field Coordinator",
+        "description": "Coordinates local outreach teams."
+      }
+    },
+    {
+      "id": "roleanalyst00112233445566778899aabbcc",
+      "class": "Role",
+      "properties": {
+        "name": "Research Analyst",
+        "description": "Maintains briefing notes and sources."
+      }
+    },
+    {
+      "id": "campaignsafe00112233445566778899aabbcc",
+      "class": "Campaign",
+      "properties": {
+        "name": "Safe Streets Survey",
+        "campaignType": "community survey",
+        "startDate": "2020-06-01",
+        "endDate": "2020-09-15",
+        "description": "Neighborhood safety feedback across city wards."
+      }
+    },
+    {
+      "id": "campaignriver00112233445566778899aabb",
+      "class": "Campaign",
+      "properties": {
+        "name": "River Clean-Up Week",
+        "campaignType": "environment",
+        "startDate": "2021-04-10",
+        "endDate": "2021-04-17",
+        "description": "Volunteer cleanup sessions along the riverbank."
+      }
+    },
+    {
+      "id": "actiondoor00112233445566778899aabbccdd",
+      "class": "Action",
+      "properties": {
+        "actionType": "door-to-door outreach",
+        "occurredAt": "2020-06-20T10:00:00",
+        "location": "Northbridge"
+      }
+    },
+    {
+      "id": "actionbrief00112233445566778899aabbcc",
+      "class": "Action",
+      "properties": {
+        "actionType": "briefing session",
+        "occurredAt": "2020-07-05T14:00:00",
+        "location": "Civic Center"
+      }
+    },
+    {
+      "id": "actioncleanup00112233445566778899aabb",
+      "class": "Action",
+      "properties": {
+        "actionType": "cleanup event",
+        "occurredAt": "2021-04-12T09:00:00",
+        "location": "Riverbank East"
+      }
+    },
+    {
+      "id": "actionbrief2a112233445566778899aabbcc",
+      "class": "Action",
+      "properties": {
+        "actionType": "coordination meeting",
+        "occurredAt": "2021-03-30T16:00:00",
+        "location": "Harbor Hall"
+      }
+    },
+    {
+      "id": "profilealex00112233445566778899aabbcc",
+      "class": "SocialMediaProfile",
+      "properties": {
+        "platform": "X",
+        "handle": "@alex_parker"
+      }
+    },
+    {
+      "id": "profilecivic00112233445566778899aabb",
+      "class": "SocialMediaProfile",
+      "properties": {
+        "platform": "Facebook",
+        "handle": "CivicDevCouncil"
+      }
+    },
+    {
+      "id": "profileharbor00112233445566778899aab",
+      "class": "SocialMediaProfile",
+      "properties": {
+        "platform": "Instagram",
+        "handle": "harbor_union"
+      }
+    },
+    {
+      "id": "post00112233445566778899aabbccddeeff",
+      "class": "Post",
+      "properties": {
+        "postedAt": "2020-06-18T09:30:00",
+        "contentHash": "hash001",
+        "url": "https://example.org/post/1"
+      }
+    },
+    {
+      "id": "post00112233445566778899aabbccddeefa",
+      "class": "Post",
+      "properties": {
+        "postedAt": "2021-04-05T11:20:00",
+        "contentHash": "hash002",
+        "url": "https://example.org/post/2"
+      }
+    },
+    {
+      "id": "post00112233445566778899aabbccddeefb",
+      "class": "Post",
+      "properties": {
+        "postedAt": "2021-04-11T08:10:00",
+        "contentHash": "hash003",
+        "url": "https://example.org/post/3"
+      }
+    },
+    {
+      "id": "post00112233445566778899aabbccddeefc",
+      "class": "Post",
+      "properties": {
+        "postedAt": "2021-04-13T18:45:00",
+        "contentHash": "hash004",
+        "url": "https://example.org/post/4"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edgehaswing00112233445566778899aabbcc",
+      "type": "hasPoliticalWing",
+      "from": "orgcivic00112233445566778899aabbccdd",
+      "to": "wingcivic2233445566778899aabbccddeeff00"
+    },
+    {
+      "id": "edgesplinter00112233445566778899aabbc",
+      "type": "splintersIntoOrganisation",
+      "from": "orgcivic00112233445566778899aabbccdd",
+      "to": "orgriverlight0011aabbccddeeff2233445566"
+    },
+    {
+      "id": "edgememberof00112233445566778899aa1",
+      "type": "memberOfOrganisation",
+      "from": "personalex0011b2c3d4e5f60718293a4b5c6d",
+      "to": "orgcivic00112233445566778899aabbccdd"
+    },
+    {
+      "id": "edgememberof00112233445566778899aa2",
+      "type": "memberOfOrganisation",
+      "from": "personjordan22b2c3d4e5f60718293a4b5c6d7",
+      "to": "orgharbor112233445566778899aabbccddeeff"
+    },
+    {
+      "id": "edgememberof00112233445566778899aa3",
+      "type": "memberOfOrganisation",
+      "from": "personmorgan33b2c3d4e5f60718293a4b5c6d",
+      "to": "orgharbor112233445566778899aabbccddeeff"
+    },
+    {
+      "id": "edgedefinesrole00112233445566778899a",
+      "type": "definesRole",
+      "from": "orgcivic00112233445566778899aabbccdd",
+      "to": "rolelead00112233445566778899aabbccdd"
+    },
+    {
+      "id": "edgedefinesrole00112233445566778899b",
+      "type": "definesRole",
+      "from": "orgharbor112233445566778899aabbccddeeff",
+      "to": "rolecoord00112233445566778899aabbccdd"
+    },
+    {
+      "id": "edgedefinesrole00112233445566778899c",
+      "type": "definesRole",
+      "from": "orgharbor112233445566778899aabbccddeeff",
+      "to": "roleanalyst00112233445566778899aabbcc"
+    },
+    {
+      "id": "edgeholdsrole00112233445566778899a1",
+      "type": "holdsRole",
+      "from": "personalex0011b2c3d4e5f60718293a4b5c6d",
+      "to": "rolelead00112233445566778899aabbccdd"
+    },
+    {
+      "id": "edgeholdsrole00112233445566778899a2",
+      "type": "holdsRole",
+      "from": "personjordan22b2c3d4e5f60718293a4b5c6d7",
+      "to": "rolecoord00112233445566778899aabbccdd"
+    },
+    {
+      "id": "edgeholdsrole00112233445566778899a3",
+      "type": "holdsRole",
+      "from": "personmorgan33b2c3d4e5f60718293a4b5c6d",
+      "to": "roleanalyst00112233445566778899aabbcc"
+    },
+    {
+      "id": "edgerunscampaign00112233445566778899a",
+      "type": "runsCampaign",
+      "from": "orgcivic00112233445566778899aabbccdd",
+      "to": "campaignsafe00112233445566778899aabbcc"
+    },
+    {
+      "id": "edgerunscampaign00112233445566778899b",
+      "type": "runsCampaign",
+      "from": "personjordan22b2c3d4e5f60718293a4b5c6d7",
+      "to": "campaignriver00112233445566778899aabb"
+    },
+    {
+      "id": "edgeincludescampaign0011223344556678",
+      "type": "includesAction",
+      "from": "campaignsafe00112233445566778899aabbcc",
+      "to": "actiondoor00112233445566778899aabbccdd"
+    },
+    {
+      "id": "edgeincludescampaign0011223344556679",
+      "type": "includesAction",
+      "from": "campaignsafe00112233445566778899aabbcc",
+      "to": "actionbrief00112233445566778899aabbcc"
+    },
+    {
+      "id": "edgeincludescampaign0011223344556670",
+      "type": "includesAction",
+      "from": "campaignriver00112233445566778899aabb",
+      "to": "actioncleanup00112233445566778899aabb"
+    },
+    {
+      "id": "edgeperformaction001122334455667788a1",
+      "type": "performsAction",
+      "from": "personalex0011b2c3d4e5f60718293a4b5c6d",
+      "to": "actiondoor00112233445566778899aabbccdd"
+    },
+    {
+      "id": "edgeperformaction001122334455667788a2",
+      "type": "performsAction",
+      "from": "orgcivic00112233445566778899aabbccdd",
+      "to": "actionbrief00112233445566778899aabbcc"
+    },
+    {
+      "id": "edgeperformaction001122334455667788a3",
+      "type": "performsAction",
+      "from": "personjordan22b2c3d4e5f60718293a4b5c6d7",
+      "to": "actioncleanup00112233445566778899aabb"
+    },
+    {
+      "id": "edgeperformaction001122334455667788a4",
+      "type": "performsAction",
+      "from": "orgharbor112233445566778899aabbccddeeff",
+      "to": "actionbrief2a112233445566778899aabbcc"
+    },
+    {
+      "id": "edgeownssocial00112233445566778899a1",
+      "type": "ownsSocialMediaProfile",
+      "from": "personalex0011b2c3d4e5f60718293a4b5c6d",
+      "to": "profilealex00112233445566778899aabbcc"
+    },
+    {
+      "id": "edgeownssocial00112233445566778899a2",
+      "type": "ownsSocialMediaProfile",
+      "from": "orgcivic00112233445566778899aabbccdd",
+      "to": "profilecivic00112233445566778899aabb"
+    },
+    {
+      "id": "edgeownssocial00112233445566778899a3",
+      "type": "ownsSocialMediaProfile",
+      "from": "orgharbor112233445566778899aabbccddeeff",
+      "to": "profileharbor00112233445566778899aab"
+    },
+    {
+      "id": "edgepublishpost00112233445566778899a1",
+      "type": "publishesPost",
+      "from": "profilealex00112233445566778899aabbcc",
+      "to": "post00112233445566778899aabbccddeeff"
+    },
+    {
+      "id": "edgepublishpost00112233445566778899a2",
+      "type": "publishesPost",
+      "from": "profilecivic00112233445566778899aabb",
+      "to": "post00112233445566778899aabbccddeefa"
+    },
+    {
+      "id": "edgepublishpost00112233445566778899a3",
+      "type": "publishesPost",
+      "from": "profileharbor00112233445566778899aab",
+      "to": "post00112233445566778899aabbccddeefb"
+    },
+    {
+      "id": "edgepublishpost00112233445566778899a4",
+      "type": "publishesPost",
+      "from": "profileharbor00112233445566778899aab",
+      "to": "post00112233445566778899aabbccddeefc"
+    }
+  ]
+}

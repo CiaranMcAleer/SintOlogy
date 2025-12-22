@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SintOlogy Explorer</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">SintOlogy</p>
+        <h1>Ontology-Guided OSINT Graph</h1>
+        <p class="lede">Explore entities and relationships driven entirely by the current ontology.</p>
+      </div>
+      <div class="status" id="status"></div>
+    </header>
+
+    <section class="controls">
+      <div class="view-toggle">
+        <button data-view="graph" class="active">Graph</button>
+        <button data-view="table">Tables</button>
+      </div>
+      <div class="filter">
+        <label for="classFilter">Focus class</label>
+        <select id="classFilter"></select>
+      </div>
+      <div class="search">
+        <label for="searchInput">Search</label>
+        <input id="searchInput" type="search" placeholder="Type to filter nodes" />
+      </div>
+      <div class="depth">
+        <label for="depthRange">Depth</label>
+        <input id="depthRange" type="range" min="2" max="6" step="1" value="2" />
+        <span id="depthValue">2</span>
+      </div>
+      <button class="clear-btn" id="viewOntology">View ontology</button>
+      <button class="clear-btn" id="exportView">Export view</button>
+      <button class="clear-btn" id="clearFilters">Clear filters</button>
+    </section>
+
+    <section class="content">
+      <div id="graphView" class="panel"></div>
+      <div id="tableView" class="panel hidden"></div>
+    </section>
+  </main>
+
+  <div class="modal hidden" id="ontologyModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Ontology</h2>
+        <button class="clear-btn" id="closeOntology">Close</button>
+      </div>
+      <pre id="ontologyContent"></pre>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

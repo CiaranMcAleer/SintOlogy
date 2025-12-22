@@ -1,0 +1,345 @@
+{
+  "classes": [
+    {
+      "label": "Action",
+      "name": "Action"
+    },
+    {
+      "label": "Campaign",
+      "name": "Campaign"
+    },
+    {
+      "label": "Organisation",
+      "name": "Organisation"
+    },
+    {
+      "label": "Person",
+      "name": "Person"
+    },
+    {
+      "label": "PoliticalWing",
+      "name": "PoliticalWing"
+    },
+    {
+      "label": "Post",
+      "name": "Post"
+    },
+    {
+      "label": "Role",
+      "name": "Role"
+    },
+    {
+      "label": "SocialMediaProfile",
+      "name": "SocialMediaProfile"
+    }
+  ],
+  "properties": [
+    {
+      "domain": [
+        "Action"
+      ],
+      "kind": "datatype",
+      "name": "actionType",
+      "range": [
+        "xsd:string"
+      ]
+    },
+    {
+      "domain": [
+        "Campaign"
+      ],
+      "kind": "datatype",
+      "name": "campaignType",
+      "range": [
+        "xsd:string"
+      ]
+    },
+    {
+      "domain": [
+        "Post"
+      ],
+      "kind": "datatype",
+      "name": "contentHash",
+      "range": [
+        "xsd:string"
+      ]
+    },
+    {
+      "domain": [
+        "Person"
+      ],
+      "kind": "datatype",
+      "name": "dateOfBirth",
+      "range": [
+        "xsd:date"
+      ]
+    },
+    {
+      "domain": [
+        "Campaign",
+        "Role"
+      ],
+      "kind": "datatype",
+      "name": "description",
+      "range": [
+        "xsd:string"
+      ]
+    },
+    {
+      "domain": [
+        "Organisation"
+      ],
+      "kind": "datatype",
+      "name": "disbandedOn",
+      "range": [
+        "xsd:date"
+      ]
+    },
+    {
+      "domain": [
+        "Campaign"
+      ],
+      "kind": "datatype",
+      "name": "endDate",
+      "range": [
+        "xsd:date"
+      ]
+    },
+    {
+      "domain": [
+        "Person"
+      ],
+      "kind": "datatype",
+      "name": "fullName",
+      "range": [
+        "xsd:string"
+      ]
+    },
+    {
+      "domain": [
+        "SocialMediaProfile"
+      ],
+      "kind": "datatype",
+      "name": "handle",
+      "range": [
+        "xsd:string"
+      ]
+    },
+    {
+      "domain": [
+        "PoliticalWing"
+      ],
+      "kind": "datatype",
+      "name": "ideology",
+      "range": [
+        "xsd:string"
+      ]
+    },
+    {
+      "domain": [
+        "Organisation"
+      ],
+      "kind": "datatype",
+      "name": "jurisdiction",
+      "range": [
+        "xsd:string"
+      ]
+    },
+    {
+      "domain": [
+        "Action"
+      ],
+      "kind": "datatype",
+      "name": "location",
+      "range": [
+        "xsd:string"
+      ]
+    },
+    {
+      "domain": [
+        "Campaign",
+        "Organisation",
+        "PoliticalWing",
+        "Role"
+      ],
+      "kind": "datatype",
+      "name": "name",
+      "range": [
+        "xsd:string"
+      ]
+    },
+    {
+      "domain": [
+        "Person"
+      ],
+      "kind": "datatype",
+      "name": "nationality",
+      "range": [
+        "xsd:string"
+      ]
+    },
+    {
+      "domain": [
+        "Action"
+      ],
+      "kind": "datatype",
+      "name": "occurredAt",
+      "range": [
+        "xsd:dateTime"
+      ]
+    },
+    {
+      "domain": [
+        "SocialMediaProfile"
+      ],
+      "kind": "datatype",
+      "name": "platform",
+      "range": [
+        "xsd:string"
+      ]
+    },
+    {
+      "domain": [
+        "Post"
+      ],
+      "kind": "datatype",
+      "name": "postedAt",
+      "range": [
+        "xsd:dateTime"
+      ]
+    },
+    {
+      "domain": [
+        "Campaign"
+      ],
+      "kind": "datatype",
+      "name": "startDate",
+      "range": [
+        "xsd:date"
+      ]
+    },
+    {
+      "domain": [
+        "Organisation"
+      ],
+      "kind": "datatype",
+      "name": "type",
+      "range": [
+        "xsd:string"
+      ]
+    },
+    {
+      "domain": [
+        "Post"
+      ],
+      "kind": "datatype",
+      "name": "url",
+      "range": [
+        "xsd:string"
+      ]
+    },
+    {
+      "domain": [
+        "Organisation"
+      ],
+      "kind": "object",
+      "name": "definesRole",
+      "range": [
+        "Role"
+      ]
+    },
+    {
+      "domain": [
+        "Organisation"
+      ],
+      "kind": "object",
+      "name": "hasPoliticalWing",
+      "range": [
+        "PoliticalWing"
+      ]
+    },
+    {
+      "domain": [
+        "Person"
+      ],
+      "kind": "object",
+      "name": "holdsRole",
+      "range": [
+        "Role"
+      ]
+    },
+    {
+      "domain": [
+        "Campaign"
+      ],
+      "kind": "object",
+      "name": "includesAction",
+      "range": [
+        "Action"
+      ]
+    },
+    {
+      "domain": [
+        "Person"
+      ],
+      "kind": "object",
+      "name": "memberOfOrganisation",
+      "range": [
+        "Organisation"
+      ]
+    },
+    {
+      "domain": [
+        "Organisation",
+        "Person"
+      ],
+      "kind": "object",
+      "name": "ownsSocialMediaProfile",
+      "range": [
+        "SocialMediaProfile"
+      ]
+    },
+    {
+      "domain": [
+        "Organisation",
+        "Person"
+      ],
+      "kind": "object",
+      "name": "performsAction",
+      "range": [
+        "Action"
+      ]
+    },
+    {
+      "domain": [
+        "SocialMediaProfile"
+      ],
+      "kind": "object",
+      "name": "publishesPost",
+      "range": [
+        "Post"
+      ]
+    },
+    {
+      "domain": [
+        "Organisation",
+        "Person"
+      ],
+      "kind": "object",
+      "name": "runsCampaign",
+      "range": [
+        "Campaign"
+      ]
+    },
+    {
+      "domain": [
+        "Organisation"
+      ],
+      "kind": "object",
+      "name": "splintersIntoOrganisation",
+      "range": [
+        "Organisation"
+      ]
+    }
+  ]
+}

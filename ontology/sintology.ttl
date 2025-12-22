@@ -1,0 +1,151 @@
+@prefix : <http://example.org/sintology#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+:Ontology a owl:Ontology .
+
+:Action a owl:Class ;
+  rdfs:label "Action" .
+
+:Campaign a owl:Class ;
+  rdfs:label "Campaign" .
+
+:Organisation a owl:Class ;
+  rdfs:label "Organisation" .
+
+:Person a owl:Class ;
+  rdfs:label "Person" .
+
+:PoliticalWing a owl:Class ;
+  rdfs:label "PoliticalWing" .
+
+:Post a owl:Class ;
+  rdfs:label "Post" .
+
+:Role a owl:Class ;
+  rdfs:label "Role" .
+
+:SocialMediaProfile a owl:Class ;
+  rdfs:label "SocialMediaProfile" .
+
+:actionType a owl:DatatypeProperty ;
+  rdfs:domain :Action ;
+  rdfs:range xsd:string .
+
+:campaignType a owl:DatatypeProperty ;
+  rdfs:domain :Campaign ;
+  rdfs:range xsd:string .
+
+:contentHash a owl:DatatypeProperty ;
+  rdfs:domain :Post ;
+  rdfs:range xsd:string .
+
+:dateOfBirth a owl:DatatypeProperty ;
+  rdfs:domain :Person ;
+  rdfs:range xsd:date .
+
+:description a owl:DatatypeProperty ;
+  rdfs:domain owl:Thing ;
+  rdfs:range xsd:string .
+
+:disbandedOn a owl:DatatypeProperty ;
+  rdfs:domain :Organisation ;
+  rdfs:range xsd:date .
+
+:endDate a owl:DatatypeProperty ;
+  rdfs:domain :Campaign ;
+  rdfs:range xsd:date .
+
+:fullName a owl:DatatypeProperty ;
+  rdfs:domain :Person ;
+  rdfs:range xsd:string .
+
+:handle a owl:DatatypeProperty ;
+  rdfs:domain :SocialMediaProfile ;
+  rdfs:range xsd:string .
+
+:ideology a owl:DatatypeProperty ;
+  rdfs:domain :PoliticalWing ;
+  rdfs:range xsd:string .
+
+:jurisdiction a owl:DatatypeProperty ;
+  rdfs:domain :Organisation ;
+  rdfs:range xsd:string .
+
+:location a owl:DatatypeProperty ;
+  rdfs:domain :Action ;
+  rdfs:range xsd:string .
+
+:name a owl:DatatypeProperty ;
+  rdfs:domain owl:Thing ;
+  rdfs:range xsd:string .
+
+:nationality a owl:DatatypeProperty ;
+  rdfs:domain :Person ;
+  rdfs:range xsd:string .
+
+:occurredAt a owl:DatatypeProperty ;
+  rdfs:domain :Action ;
+  rdfs:range xsd:dateTime .
+
+:platform a owl:DatatypeProperty ;
+  rdfs:domain :SocialMediaProfile ;
+  rdfs:range xsd:string .
+
+:postedAt a owl:DatatypeProperty ;
+  rdfs:domain :Post ;
+  rdfs:range xsd:dateTime .
+
+:startDate a owl:DatatypeProperty ;
+  rdfs:domain :Campaign ;
+  rdfs:range xsd:date .
+
+:type a owl:DatatypeProperty ;
+  rdfs:domain :Organisation ;
+  rdfs:range xsd:string .
+
+:url a owl:DatatypeProperty ;
+  rdfs:domain :Post ;
+  rdfs:range xsd:string .
+
+:definesRole a owl:ObjectProperty ;
+  rdfs:domain :Organisation ;
+  rdfs:range :Role .
+
+:hasPoliticalWing a owl:ObjectProperty ;
+  rdfs:domain :Organisation ;
+  rdfs:range :PoliticalWing .
+
+:holdsRole a owl:ObjectProperty ;
+  rdfs:domain :Person ;
+  rdfs:range :Role .
+
+:includesAction a owl:ObjectProperty ;
+  rdfs:domain :Campaign ;
+  rdfs:range :Action .
+
+:memberOfOrganisation a owl:ObjectProperty ;
+  rdfs:domain :Person ;
+  rdfs:range :Organisation .
+
+:ownsSocialMediaProfile a owl:ObjectProperty ;
+  rdfs:domain owl:Thing ;
+  rdfs:range :SocialMediaProfile .
+
+:performsAction a owl:ObjectProperty ;
+  rdfs:domain owl:Thing ;
+  rdfs:range :Action .
+
+:publishesPost a owl:ObjectProperty ;
+  rdfs:domain :SocialMediaProfile ;
+  rdfs:range :Post .
+
+:runsCampaign a owl:ObjectProperty ;
+  rdfs:domain owl:Thing ;
+  rdfs:range :Campaign .
+
+:splintersIntoOrganisation a owl:ObjectProperty ;
+  rdfs:domain :Organisation ;
+  rdfs:range :Organisation .
