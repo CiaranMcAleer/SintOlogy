@@ -1,6 +1,23 @@
 const DATA_URL = "/data/graph.json";
 const ONTOLOGY_URL = "/ontology/ontology.json";
 
+// Import Transformers.js dynamically
+let transformers = null;
+let qaPipeline = null;
+
+async function loadTransformers() {
+  if (!transformers) {
+    try {
+      transformers = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
+      transformers.env.allowRemoteModels = true;
+      transformers.env.allowLocalModels = false;
+    } catch (error) {
+      console.error("Failed to load Transformers.js:", error);
+    }
+  }
+  return transformers;
+}
+
 const palette = [
   "#d95f4c",
   "#4c7fd9",
@@ -36,6 +53,11 @@ const exportViewBtn = document.getElementById("exportView");
 const ontologyModal = document.getElementById("ontologyModal");
 const ontologyContent = document.getElementById("ontologyContent");
 const closeOntologyBtn = document.getElementById("closeOntology");
+const qaInput = document.getElementById("qaInput");
+const askBtn = document.getElementById("askBtn");
+const qaModal = document.getElementById("qaModal");
+const qaResult = document.getElementById("qaResult");
+const closeQABtn = document.getElementById("closeQA");
 
 function fetchJson(url) {
   return fetch(url).then((res) => {
@@ -543,6 +565,153 @@ exportViewBtn.addEventListener("click", () => {
     exportGraphView();
   } else {
     exportTableView();
+  }
+});
+
+async function initQAPipeline() {
+  if (qaPipeline) {
+    return qaPipeline;
+  }
+  
+  try {
+    const tf = await loadTransformers();
+    if (!tf) {
+      throw new Error("Transformers.js not available");
+    }
+    
+    setStatus("Loading Q&A model... This may take a moment.");
+    qaPipeline = await tf.pipeline('question-answering', 'Xenova/distilbert-base-cased-distilled-squad');
+    setStatus("Q&A model loaded.");
+    return qaPipeline;
+  } catch (error) {
+    console.error("Error loading Q&A model:", error);
+    throw error;
+  }
+}
+
+function buildContextFromGraph() {
+  // Build a text context from the current graph data
+  const nodes = filteredNodes();
+  
+  if (nodes.length === 0) {
+    return "No data available. Please adjust filters or load data.";
+  }
+  
+  let context = "The following entities are in the current view:\n\n";
+  
+  // Group nodes by class
+  const nodesByClass = {};
+  nodes.forEach(node => {
+    if (!nodesByClass[node.class]) {
+      nodesByClass[node.class] = [];
+    }
+    nodesByClass[node.class].push(node);
+  });
+  
+  // Build context for each class
+  Object.keys(nodesByClass).forEach(className => {
+    context += `${className} entities:\n`;
+    nodesByClass[className].forEach(node => {
+      const label = nodeLabel(node);
+      const props = node.properties || {};
+      const propText = Object.entries(props)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join(', ');
+      context += `- ${label}`;
+      if (propText) {
+        context += ` (${propText})`;
+      }
+      context += '\n';
+    });
+    context += '\n';
+  });
+  
+  // Add relationship information
+  const nodeIds = new Set(nodes.map(n => n.id));
+  const edges = filteredEdges(nodeIds);
+  
+  if (edges.length > 0) {
+    context += "Relationships:\n";
+    edges.forEach(edge => {
+      const fromNode = nodeById(edge.from);
+      const toNode = nodeById(edge.to);
+      if (fromNode && toNode) {
+        context += `- ${nodeLabel(fromNode)} ${edge.type} ${nodeLabel(toNode)}\n`;
+      }
+    });
+  }
+  
+  return context;
+}
+
+async function answerQuestion() {
+  const question = qaInput.value.trim();
+  
+  if (!question) {
+    alert("Please enter a question.");
+    return;
+  }
+  
+  try {
+    askBtn.disabled = true;
+    askBtn.textContent = "Processing...";
+    
+    // Initialize Q&A pipeline
+    const pipeline = await initQAPipeline();
+    
+    // Build context from current graph view
+    const context = buildContextFromGraph();
+    
+    setStatus("Answering question...");
+    
+    // Get answer
+    const result = await pipeline(question, context);
+    
+    // Display result
+    const confidence = (result.score * 100).toFixed(1);
+    qaResult.innerHTML = `
+      <div class="qa-result-content">
+        <h3>Question:</h3>
+        <p class="question">${question}</p>
+        
+        <h3>Answer:</h3>
+        <p class="answer">${result.answer}</p>
+        
+        <p class="confidence">Confidence: ${confidence}%</p>
+        
+        <details>
+          <summary>Context used (click to expand)</summary>
+          <pre class="context">${context}</pre>
+        </details>
+      </div>
+    `;
+    
+    qaModal.classList.remove("hidden");
+    setStatus("Question answered.");
+  } catch (error) {
+    console.error("Error answering question:", error);
+    alert(`Error: ${error.message}`);
+    setStatus("Error processing question.");
+  } finally {
+    askBtn.disabled = false;
+    askBtn.textContent = "Ask";
+  }
+}
+
+askBtn.addEventListener("click", answerQuestion);
+qaInput.addEventListener("keypress", (e) => {
+  if (e.key === "Enter") {
+    answerQuestion();
+  }
+});
+
+closeQABtn.addEventListener("click", () => {
+  qaModal.classList.add("hidden");
+});
+
+qaModal.addEventListener("click", (event) => {
+  if (event.target === qaModal) {
+    qaModal.classList.add("hidden");
   }
 });
 
