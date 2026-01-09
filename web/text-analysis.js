@@ -6,6 +6,9 @@ env.allowLocalModels = false;
 
 const ONTOLOGY_URL = "/ontology/ontology.json";
 
+// Configuration constants
+const CONFIDENCE_THRESHOLD = 0.1; // Minimum confidence score for displaying results
+
 const state = {
   ontology: null,
   nerPipeline: null,
@@ -73,6 +76,29 @@ async function initializeModels() {
   }
 }
 
+function consolidateEntityToken(entityType, item, entities) {
+  // Handle BERT tokenization patterns:
+  // - 'B-' prefix indicates beginning of entity
+  // - 'I-' prefix indicates inside/continuation of entity
+  // - '##' prefix indicates subword token
+  const lastEntity = entities[entityType][entities[entityType].length - 1];
+  
+  if (lastEntity && item.entity.startsWith('I-') && item.start === lastEntity.end) {
+    // Continuation of previous entity - merge tokens
+    lastEntity.word += item.word.replace('##', '');
+    lastEntity.end = item.end;
+    lastEntity.score = (lastEntity.score + item.score) / 2;
+  } else {
+    // New entity
+    entities[entityType].push({
+      word: item.word.replace('##', ''),
+      score: item.score,
+      start: item.start,
+      end: item.end
+    });
+  }
+}
+
 async function performNER(text) {
   try {
     const result = await state.nerPipeline(text);
@@ -85,21 +111,7 @@ async function performNER(text) {
         entities[entityType] = [];
       }
       
-      // Check if this is a continuation of the previous entity based on token positions
-      const lastEntity = entities[entityType][entities[entityType].length - 1];
-      if (lastEntity && item.entity.startsWith('I-') && 
-          item.start === lastEntity.end) {
-        lastEntity.word += item.word.replace('##', '');
-        lastEntity.end = item.end;
-        lastEntity.score = (lastEntity.score + item.score) / 2;
-      } else {
-        entities[entityType].push({
-          word: item.word.replace('##', ''),
-          score: item.score,
-          start: item.start,
-          end: item.end
-        });
-      }
+      consolidateEntityToken(entityType, item, entities);
     });
 
     return entities;
@@ -192,7 +204,7 @@ function renderClassification(classification) {
   
   classification.labels.forEach((label, idx) => {
     const score = classification.scores[idx];
-    if (score > 0.1) {  // Only show results with >10% confidence
+    if (score > CONFIDENCE_THRESHOLD) {
       const confidence = (score * 100).toFixed(1);
       html += `<li><span class="class-label">${escapeHtml(label)}</span> <span class="confidence">(${confidence}%)</span></li>`;
     }
@@ -229,7 +241,7 @@ function renderOntologyMapping(entities, classification) {
     const topClasses = classification.labels.slice(0, 5);
     topClasses.forEach((label, idx) => {
       const score = classification.scores[idx];
-      if (score > 0.1) {
+      if (score > CONFIDENCE_THRESHOLD) {
         const confidence = (score * 100).toFixed(1);
         
         // Find matching ontology class
