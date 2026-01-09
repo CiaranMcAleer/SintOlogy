@@ -21,6 +21,12 @@ const entitiesResult = document.getElementById("entitiesResult");
 const relationshipsResult = document.getElementById("relationshipsResult");
 const ontologyMapping = document.getElementById("ontologyMapping");
 
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 function setStatus(text) {
   statusEl.textContent = text;
 }
@@ -79,19 +85,19 @@ async function performNER(text) {
         entities[entityType] = [];
       }
       
-      // Check if this is a continuation of the previous entity
+      // Check if this is a continuation of the previous entity based on token positions
       const lastEntity = entities[entityType][entities[entityType].length - 1];
       if (lastEntity && item.entity.startsWith('I-') && 
-          item.index === lastEntity.endIndex + 1) {
+          item.start === lastEntity.end) {
         lastEntity.word += item.word.replace('##', '');
-        lastEntity.endIndex = item.index;
+        lastEntity.end = item.end;
         lastEntity.score = (lastEntity.score + item.score) / 2;
       } else {
         entities[entityType].push({
           word: item.word.replace('##', ''),
           score: item.score,
-          index: item.index,
-          endIndex: item.index
+          start: item.start,
+          end: item.end
         });
       }
     });
@@ -127,8 +133,8 @@ function mapEntitiesToOntology(entities) {
     ORG: 'Organisation',
     ORGANISATION: 'Organisation',
     ORGANIZATION: 'Organisation',
-    LOC: 'Action',  // Location might be related to actions
-    LOCATION: 'Action',
+    // Note: Location entities don't have a direct ontology class mapping
+    // LOC and LOCATION are kept as-is for now
     MISC: null  // Miscellaneous doesn't map directly
   };
 
@@ -160,12 +166,12 @@ function renderEntities(entities) {
     if (items.length === 0) return;
     
     html += `<div class="entity-group">`;
-    html += `<h3>${entityType}</h3>`;
+    html += `<h3>${escapeHtml(entityType)}</h3>`;
     html += `<ul class="entity-list">`;
     
     items.forEach(item => {
       const confidence = (item.score * 100).toFixed(1);
-      html += `<li><span class="entity-word">${item.word}</span> <span class="confidence">(${confidence}%)</span></li>`;
+      html += `<li><span class="entity-word">${escapeHtml(item.word)}</span> <span class="confidence">(${confidence}%)</span></li>`;
     });
     
     html += `</ul></div>`;
@@ -188,7 +194,7 @@ function renderClassification(classification) {
     const score = classification.scores[idx];
     if (score > 0.1) {  // Only show results with >10% confidence
       const confidence = (score * 100).toFixed(1);
-      html += `<li><span class="class-label">${label}</span> <span class="confidence">(${confidence}%)</span></li>`;
+      html += `<li><span class="class-label">${escapeHtml(label)}</span> <span class="confidence">(${confidence}%)</span></li>`;
     }
   });
   
@@ -207,7 +213,8 @@ function renderOntologyMapping(entities, classification) {
     Object.keys(entities).forEach(ontologyClass => {
       const items = entities[ontologyClass];
       if (items.length > 0) {
-        html += `<li><strong>${ontologyClass}:</strong> ${items.map(i => i.word).join(', ')}</li>`;
+        const escapedItems = items.map(i => escapeHtml(i.word)).join(', ');
+        html += `<li><strong>${escapeHtml(ontologyClass)}:</strong> ${escapedItems}</li>`;
       }
     });
     
@@ -236,8 +243,8 @@ function renderOntologyMapping(entities, classification) {
             p.domain && p.domain.includes(ontologyClass.name)
           );
           
-          const propNames = properties.map(p => p.name).join(', ');
-          html += `<li><strong>${label}</strong> (${confidence}%)`;
+          const propNames = properties.map(p => escapeHtml(p.name)).join(', ');
+          html += `<li><strong>${escapeHtml(label)}</strong> (${confidence}%)`;
           if (propNames) {
             html += `<br/><span class="properties">Properties: ${propNames}</span>`;
           }

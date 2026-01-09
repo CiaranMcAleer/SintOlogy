@@ -59,6 +59,12 @@ const qaModal = document.getElementById("qaModal");
 const qaResult = document.getElementById("qaResult");
 const closeQABtn = document.getElementById("closeQA");
 
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 function fetchJson(url) {
   return fetch(url).then((res) => {
     if (!res.ok) {
@@ -672,16 +678,16 @@ async function answerQuestion() {
     qaResult.innerHTML = `
       <div class="qa-result-content">
         <h3>Question:</h3>
-        <p class="question">${question}</p>
+        <p class="question">${escapeHtml(question)}</p>
         
         <h3>Answer:</h3>
-        <p class="answer">${result.answer}</p>
+        <p class="answer">${escapeHtml(result.answer)}</p>
         
         <p class="confidence">Confidence: ${confidence}%</p>
         
         <details>
           <summary>Context used (click to expand)</summary>
-          <pre class="context">${context}</pre>
+          <pre class="context">${escapeHtml(context)}</pre>
         </details>
       </div>
     `;
