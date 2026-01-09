@@ -9,11 +9,36 @@ const ONTOLOGY_URL = "/ontology/ontology.json";
 // Configuration constants
 const CONFIDENCE_THRESHOLD = 0.1; // Minimum confidence score for displaying results
 
+// Model configuration for easy future updates
+const MODEL_CONFIG = {
+  ner: {
+    name: 'Xenova/bert-base-NER',
+    task: 'token-classification',
+    size: '~420MB',
+    url: 'https://huggingface.co/Xenova/bert-base-NER'
+  },
+  classifier: {
+    name: 'Xenova/distilbert-base-uncased-mnli',
+    task: 'zero-shot-classification',
+    size: '~260MB',
+    url: 'https://huggingface.co/Xenova/distilbert-base-uncased-mnli'
+  },
+  relationExtraction: {
+    name: 'Xenova/distilbert-base-uncased-mnli',
+    task: 'zero-shot-classification',
+    size: '~260MB',
+    url: 'https://huggingface.co/Xenova/distilbert-base-uncased-mnli'
+  }
+};
+
 const state = {
   ontology: null,
   nerPipeline: null,
   classifierPipeline: null,
-  isLoading: false
+  relationPipeline: null,
+  isLoading: false,
+  useExistingClassesOnly: true, // Toggle for existing vs new classes
+  lastAnalysisResults: null // Store results for export
 };
 
 const statusEl = document.getElementById("status");
@@ -43,26 +68,88 @@ function fetchJson(url) {
   });
 }
 
+async function showModelConsentModal(modelInfo) {
+  return new Promise((resolve) => {
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Load AI Model</h2>
+        </div>
+        <div class="modal-body">
+          <p>This feature requires downloading an AI model:</p>
+          <ul style="margin: 16px 0; padding-left: 24px;">
+            <li><strong>Model:</strong> ${modelInfo.name}</li>
+            <li><strong>Size:</strong> ${modelInfo.size}</li>
+            <li><strong>Task:</strong> ${modelInfo.task}</li>
+          </ul>
+          <p>The model will be downloaded once and cached in your browser for future use.</p>
+          <p style="margin-top: 12px;">
+            <a href="${modelInfo.url}" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">
+              View model card on Hugging Face →
+            </a>
+          </p>
+        </div>
+        <div class="button-group" style="margin-top: 24px; display: flex; gap: 12px; justify-content: flex-end;">
+          <button class="clear-btn" id="cancelModel">Cancel</button>
+          <button class="primary-btn" id="acceptModel">Download and Continue</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    document.getElementById('cancelModel').onclick = () => {
+      document.body.removeChild(modal);
+      resolve(false);
+    };
+    
+    document.getElementById('acceptModel').onclick = () => {
+      document.body.removeChild(modal);
+      resolve(true);
+    };
+    
+    modal.onclick = (e) => {
+      if (e.target === modal) {
+        document.body.removeChild(modal);
+        resolve(false);
+      }
+    };
+  });
+}
+
 async function initializeModels() {
-  if (state.nerPipeline && state.classifierPipeline) {
+  if (state.nerPipeline && state.classifierPipeline && state.relationPipeline) {
     return;
   }
 
   try {
-    setStatus("Loading AI models... This may take a moment on first load.");
     state.isLoading = true;
     analyzeBtn.disabled = true;
 
     // Initialize NER pipeline for entity extraction
     if (!state.nerPipeline) {
+      const consent = await showModelConsentModal(MODEL_CONFIG.ner);
+      if (!consent) {
+        throw new Error("User declined model download");
+      }
+      
       setStatus("Loading Named Entity Recognition model...");
-      state.nerPipeline = await pipeline('token-classification', 'Xenova/bert-base-NER');
+      state.nerPipeline = await pipeline(MODEL_CONFIG.ner.task, MODEL_CONFIG.ner.name);
     }
 
     // Initialize zero-shot classification for relationship/class classification
     if (!state.classifierPipeline) {
+      const consent = await showModelConsentModal(MODEL_CONFIG.classifier);
+      if (!consent) {
+        throw new Error("User declined model download");
+      }
+      
       setStatus("Loading Zero-Shot Classification model...");
-      state.classifierPipeline = await pipeline('zero-shot-classification', 'Xenova/distilbert-base-uncased-mnli');
+      state.classifierPipeline = await pipeline(MODEL_CONFIG.classifier.task, MODEL_CONFIG.classifier.name);
+      // Reuse for relationship extraction
+      state.relationPipeline = state.classifierPipeline;
     }
 
     state.isLoading = false;
@@ -136,7 +223,9 @@ async function performNER(text) {
 async function performClassification(text) {
   try {
     // Get ontology classes for classification
-    const classLabels = state.ontology.classes.map(c => c.label || c.name);
+    const classLabels = state.useExistingClassesOnly 
+      ? state.ontology.classes.map(c => c.label || c.name)
+      : [...state.ontology.classes.map(c => c.label || c.name), 'Article', 'Document', 'Event', 'Location', 'Topic'];
     
     // Classify text against ontology classes
     const result = await state.classifierPipeline(text, classLabels, {
@@ -147,6 +236,29 @@ async function performClassification(text) {
   } catch (error) {
     console.error("Error in classification:", error);
     throw error;
+  }
+}
+
+async function extractRelationships(text, entities) {
+  try {
+    // Get relationship types from ontology
+    const relationshipTypes = state.ontology.properties
+      .filter(p => p.kind === 'object')
+      .map(p => p.name);
+    
+    if (relationshipTypes.length === 0) {
+      return null;
+    }
+    
+    // Use zero-shot classification to identify potential relationships
+    const result = await state.relationPipeline(text, relationshipTypes, {
+      multi_label: true
+    });
+    
+    return result;
+  } catch (error) {
+    console.error("Error in relationship extraction:", error);
+    return null;
   }
 }
 
@@ -206,13 +318,16 @@ function renderEntities(entities) {
   entitiesResult.innerHTML = html;
 }
 
-function renderClassification(classification) {
+function renderClassification(classification, relationships) {
   if (!classification || !classification.labels) {
     relationshipsResult.innerHTML = '<p class="placeholder">No classification results.</p>';
     return;
   }
 
   let html = '<div class="classification-results">';
+  
+  // Show ontology classifications
+  html += '<h3>Ontology Classifications</h3>';
   html += '<ul class="classification-list">';
   
   classification.labels.forEach((label, idx) => {
@@ -223,7 +338,25 @@ function renderClassification(classification) {
     }
   });
   
-  html += '</ul></div>';
+  html += '</ul>';
+  
+  // Show relationships if available
+  if (relationships && relationships.labels) {
+    html += '<h3 style="margin-top: 20px;">Detected Relationships</h3>';
+    html += '<ul class="classification-list">';
+    
+    relationships.labels.forEach((label, idx) => {
+      const score = relationships.scores[idx];
+      if (score > CONFIDENCE_THRESHOLD) {
+        const confidence = (score * 100).toFixed(1);
+        html += `<li><span class="class-label">${escapeHtml(label)}</span> <span class="confidence">(${confidence}%)</span></li>`;
+      }
+    });
+    
+    html += '</ul>';
+  }
+  
+  html += '</div>';
   relationshipsResult.innerHTML = html;
 }
 
@@ -314,11 +447,26 @@ async function analyzeText() {
     
     // Perform classification
     const classification = await performClassification(text);
-    renderClassification(classification);
+    
+    setStatus("Extracting relationships...");
+    
+    // Extract relationships
+    const relationships = await extractRelationships(text, entities);
+    renderClassification(classification, relationships);
     
     // Map to ontology
     const ontologyEntities = mapEntitiesToOntology(entities);
     renderOntologyMapping(ontologyEntities, classification);
+    
+    // Store results for export
+    state.lastAnalysisResults = {
+      text,
+      entities,
+      classification,
+      relationships,
+      ontologyEntities,
+      timestamp: new Date().toISOString()
+    };
     
     setStatus("Analysis complete.");
     analyzeBtn.disabled = false;
@@ -327,6 +475,80 @@ async function analyzeText() {
     setStatus(`Error: ${error.message}`);
     analyzeBtn.disabled = false;
   }
+}
+
+function exportResults() {
+  if (!state.lastAnalysisResults) {
+    alert("No analysis results to export. Please analyze some text first.");
+    return;
+  }
+  
+  const results = state.lastAnalysisResults;
+  
+  // Convert to graph-compatible format
+  const nodes = [];
+  const edges = [];
+  let nodeIdCounter = 0;
+  
+  // Add entities as nodes
+  Object.keys(results.ontologyEntities).forEach(ontologyClass => {
+    results.ontologyEntities[ontologyClass].forEach(entity => {
+      const nodeId = `extracted-${ontologyClass.toLowerCase()}-${nodeIdCounter++}`;
+      nodes.push({
+        id: nodeId,
+        class: ontologyClass,
+        properties: {
+          name: entity.word,
+          extractedFrom: results.text.substring(0, 100) + '...',
+          confidence: entity.score,
+          extractedAt: results.timestamp
+        }
+      });
+    });
+  });
+  
+  // Create export object
+  const exportData = {
+    metadata: {
+      exportedAt: new Date().toISOString(),
+      source: 'SintOlogy Text Analysis',
+      textAnalyzed: results.text.substring(0, 200) + (results.text.length > 200 ? '...' : '')
+    },
+    nodes,
+    edges,
+    rawAnalysis: {
+      entities: results.entities,
+      classifications: results.classification,
+      relationships: results.relationships
+    }
+  };
+  
+  // Download as JSON
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `sintology-text-analysis-${Date.now()}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  
+  setStatus("Results exported successfully.");
+}
+
+function toggleClassMode() {
+  state.useExistingClassesOnly = !state.useExistingClassesOnly;
+  const toggle = document.getElementById('classModeToggle');
+  if (toggle) {
+    toggle.textContent = state.useExistingClassesOnly ? 'Existing Classes Only' : 'Include New Classes';
+    toggle.title = state.useExistingClassesOnly 
+      ? 'Click to allow detection of new entity/relationship classes'
+      : 'Click to restrict to existing ontology classes only';
+  }
+  setStatus(state.useExistingClassesOnly 
+    ? 'Mode: Existing ontology classes only' 
+    : 'Mode: Will suggest new classes if relevant');
 }
 
 function clearAll() {
@@ -349,5 +571,19 @@ async function init() {
 
 analyzeBtn.addEventListener("click", analyzeText);
 clearBtn.addEventListener("click", clearAll);
+
+// Add export and toggle listeners when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+  const exportBtn = document.getElementById('exportBtn');
+  const classModeToggle = document.getElementById('classModeToggle');
+  
+  if (exportBtn) {
+    exportBtn.addEventListener('click', exportResults);
+  }
+  
+  if (classModeToggle) {
+    classModeToggle.addEventListener('click', toggleClassMode);
+  }
+});
 
 init();

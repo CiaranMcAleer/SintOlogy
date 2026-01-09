@@ -76,11 +76,17 @@ The web UI includes AI-powered features using [Transformers.js](https://huggingf
 **Question Answering** (Main page)
 - Ask natural language questions about the graph data
 - Uses BERT-based models for context-aware answers
+- **Context is built from currently filtered/searched view** (both Graph and Table views)
+- Filters, search, and focus node selection narrow down the data used for Q&A
+- Context limited to 2000 characters with truncation warning if exceeded
 - Example: "Who is Alex Parker?" or "What campaigns are there?"
 
 **Text Analysis** (Separate page)
 - Named Entity Recognition (NER) - Extract people, organizations, locations
+- Relationship Extraction - Identify connections between entities
 - Zero-Shot Classification - Classify text against ontology classes
+- Toggle to detect new classes beyond existing ontology
+- Export results in graph-compatible format for ingestion
 - Ontology Mapping - Map entities to existing ontology structure
 
 See [`web/README.md`](web/README.md) for detailed AI feature documentation.

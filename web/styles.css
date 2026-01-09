@@ -79,6 +79,12 @@ body {
   justify-content: space-between;
 }
 
+.control-buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .view-toggle {
   display: inline-flex;
   background: var(--surface-strong);

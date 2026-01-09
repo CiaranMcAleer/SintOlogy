@@ -1,14 +1,25 @@
 const DATA_URL = "/data/graph.json";
 const ONTOLOGY_URL = "/ontology/ontology.json";
 
-// Import Transformers.js dynamically
-let transformers = null;
+// Import Transformers.js dynamically - using proper pipeline import as per docs
+let pipeline = null;
+let env = null;
 let qaPipeline = null;
 let transformersPromise = null;
 
+// Model configuration for easy future updates
+const MODEL_CONFIG = {
+  qa: {
+    name: 'Xenova/distilbert-base-cased-distilled-squad',
+    task: 'question-answering',
+    size: '~250MB',
+    url: 'https://huggingface.co/Xenova/distilbert-base-cased-distilled-squad'
+  }
+};
+
 async function loadTransformers() {
-  if (transformers) {
-    return transformers;
+  if (pipeline) {
+    return { pipeline, env };
   }
   
   if (transformersPromise) {
@@ -17,10 +28,12 @@ async function loadTransformers() {
   
   transformersPromise = (async () => {
     try {
-      transformers = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
-      transformers.env.allowRemoteModels = true;
-      transformers.env.allowLocalModels = false;
-      return transformers;
+      const module = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
+      pipeline = module.pipeline;
+      env = module.env;
+      env.allowRemoteModels = true;
+      env.allowLocalModels = false;
+      return { pipeline, env };
     } catch (error) {
       console.error("Failed to load Transformers.js:", error);
       transformersPromise = null;
@@ -29,6 +42,69 @@ async function loadTransformers() {
   })();
   
   return transformersPromise;
+}
+
+async function checkWebGPU() {
+  if ('gpu' in navigator) {
+    try {
+      const adapter = await navigator.gpu.requestAdapter();
+      return !!adapter;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+async function showModelConsentModal(modelInfo) {
+  return new Promise((resolve) => {
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Load AI Model</h2>
+        </div>
+        <div class="modal-body">
+          <p>This feature requires downloading an AI model:</p>
+          <ul style="margin: 16px 0; padding-left: 24px;">
+            <li><strong>Model:</strong> ${modelInfo.name}</li>
+            <li><strong>Size:</strong> ${modelInfo.size}</li>
+            <li><strong>Task:</strong> ${modelInfo.task}</li>
+          </ul>
+          <p>The model will be downloaded once and cached in your browser for future use.</p>
+          <p style="margin-top: 12px;">
+            <a href="${modelInfo.url}" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">
+              View model card on Hugging Face →
+            </a>
+          </p>
+        </div>
+        <div class="button-group" style="margin-top: 24px; display: flex; gap: 12px; justify-content: flex-end;">
+          <button class="clear-btn" id="cancelModel">Cancel</button>
+          <button class="primary-btn" id="acceptModel">Download and Continue</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    document.getElementById('cancelModel').onclick = () => {
+      document.body.removeChild(modal);
+      resolve(false);
+    };
+    
+    document.getElementById('acceptModel').onclick = () => {
+      document.body.removeChild(modal);
+      resolve(true);
+    };
+    
+    modal.onclick = (e) => {
+      if (e.target === modal) {
+        document.body.removeChild(modal);
+        resolve(false);
+      }
+    };
+  });
 }
 
 const palette = [
@@ -545,6 +621,33 @@ async function init() {
     state.graph = graph;
     buildFilter();
     setView("graph");
+    
+    // Check WebGPU support and show warning if not available
+    const hasWebGPU = await checkWebGPU();
+    if (!hasWebGPU) {
+      const warning = document.createElement('div');
+      warning.className = 'webgpu-warning';
+      warning.innerHTML = `
+        <p>⚠️ <strong>WebGPU not available.</strong> AI features will use CPU and may be slower. 
+        For best performance, use a browser with WebGPU support (Chrome 113+, Edge 113+).</p>
+        <button onclick="this.parentElement.remove()">Dismiss</button>
+      `;
+      warning.style.cssText = `
+        position: fixed; top: 80px; right: 20px; max-width: 400px;
+        background: var(--surface); border: 2px solid var(--accent);
+        border-radius: 12px; padding: 16px; box-shadow: 0 4px 12px var(--shadow);
+        z-index: 1000; animation: slideIn 0.3s ease-out;
+      `;
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .webgpu-warning button { margin-top: 8px; padding: 6px 12px; border: 1px solid var(--line); 
+          background: white; border-radius: 6px; cursor: pointer; }
+        .webgpu-warning button:hover { background: var(--surface-strong); }
+      `;
+      document.head.appendChild(style);
+      document.body.appendChild(warning);
+    }
   } catch (error) {
     setStatus("Failed to load ontology or data.");
     console.error(error);
@@ -592,14 +695,20 @@ async function initQAPipeline() {
     return qaPipeline;
   }
   
+  // Show model consent modal
+  const consent = await showModelConsentModal(MODEL_CONFIG.qa);
+  if (!consent) {
+    throw new Error("User declined model download");
+  }
+  
   try {
-    const tf = await loadTransformers();
-    if (!tf) {
+    const { pipeline: pipelineFn } = await loadTransformers();
+    if (!pipelineFn) {
       throw new Error("Transformers.js not available");
     }
     
     setStatus("Loading Q&A model... This may take a moment.");
-    qaPipeline = await tf.pipeline('question-answering', 'Xenova/distilbert-base-cased-distilled-squad');
+    qaPipeline = await pipelineFn(MODEL_CONFIG.qa.task, MODEL_CONFIG.qa.name);
     setStatus("Q&A model loaded.");
     return qaPipeline;
   } catch (error) {
@@ -613,11 +722,12 @@ function buildContextFromGraph() {
   const nodes = filteredNodes();
   
   if (nodes.length === 0) {
-    return "No data available. Please adjust filters or load data.";
+    return { context: "No data available. Please adjust filters or load data.", wasTruncated: false };
   }
   
   let context = "The following entities are in the current view:\n\n";
   const MAX_CONTEXT_LENGTH = 2000; // Limit context to avoid exceeding model input limits
+  let wasTruncated = false;
   
   // Group nodes by class
   const nodesByClass = {};
@@ -677,9 +787,10 @@ function buildContextFromGraph() {
   // Truncate if still too long
   if (context.length > MAX_CONTEXT_LENGTH) {
     context = context.substring(0, MAX_CONTEXT_LENGTH) + "\n...(truncated)";
+    wasTruncated = true;
   }
   
-  return context;
+  return { context, wasTruncated };
 }
 
 async function answerQuestion() {
@@ -698,15 +809,23 @@ async function answerQuestion() {
     const pipeline = await initQAPipeline();
     
     // Build context from current graph view
-    const context = buildContextFromGraph();
+    const { context, wasTruncated } = buildContextFromGraph();
     
-    setStatus("Answering question...");
+    // Warn user if context was truncated
+    if (wasTruncated) {
+      setStatus("⚠️ Context was truncated due to length. Consider using filters to narrow down the data.");
+    } else {
+      setStatus("Answering question...");
+    }
     
     // Get answer
     const result = await pipeline(question, context);
     
     // Display result
     const confidence = (result.score * 100).toFixed(1);
+    const truncationWarning = wasTruncated ? 
+      '<p class="warning" style="color: var(--accent); margin-top: 8px;">⚠️ Context was truncated. The answer may not include all available data. Try using filters to narrow down the view.</p>' : '';
+    
     qaResult.innerHTML = `
       <div class="qa-result-content">
         <h3>Question:</h3>
@@ -716,6 +835,7 @@ async function answerQuestion() {
         <p class="answer">${escapeHtml(result.answer)}</p>
         
         <p class="confidence">Confidence: ${confidence}%</p>
+        ${truncationWarning}
         
         <details>
           <summary>Context used (click to expand)</summary>
