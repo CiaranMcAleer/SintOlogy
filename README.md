@@ -7,6 +7,7 @@ SintOlogy is a research repository for building a foundational OSINT ontology an
 - Define a reusable OSINT ontology based on a concise ERD source.
 - Generate OWL2/RDF and a JSON schema from the ERD.
 - Provide guided ingestion and a dynamic web viewer that follow the ontology.
+- Enable AI-powered analysis and querying of OSINT data using client-side machine learning.
 
 ## Repository Structure
 - ERD source: `erd/erd.md`
@@ -68,6 +69,21 @@ python3 scripts/ingest.py --load data/synthetic.json --non-interactive
 python3 scripts/serve.py
 ```
 Open `http://localhost:8000/web/`.
+
+#### AI Features
+The web UI includes AI-powered features using [Transformers.js](https://huggingface.co/docs/transformers.js):
+
+**Question Answering** (Main page)
+- Ask natural language questions about the graph data
+- Uses BERT-based models for context-aware answers
+- Example: "Who is Alex Parker?" or "What campaigns are there?"
+
+**Text Analysis** (Separate page)
+- Named Entity Recognition (NER) - Extract people, organizations, locations
+- Zero-Shot Classification - Classify text against ontology classes
+- Ontology Mapping - Map entities to existing ontology structure
+
+See [`web/README.md`](web/README.md) for detailed AI feature documentation.
 
 ## Data Format (Graph Store)
 The local graph store is a JSON file with `nodes` and `edges`:
