@@ -9,6 +9,9 @@ const ONTOLOGY_URL = "/ontology/ontology.json";
 // Configuration constants
 const CONFIDENCE_THRESHOLD = 0.1; // Minimum confidence score for displaying results
 
+// Additional class labels for new class detection mode
+const ADDITIONAL_CLASS_LABELS = ['Article', 'Document', 'Event', 'Location', 'Topic'];
+
 // Model configuration for easy future updates
 const MODEL_CONFIG = {
   ner: {
@@ -22,13 +25,8 @@ const MODEL_CONFIG = {
     task: 'zero-shot-classification',
     size: '~260MB',
     url: 'https://huggingface.co/Xenova/distilbert-base-uncased-mnli'
-  },
-  relationExtraction: {
-    name: 'Xenova/distilbert-base-uncased-mnli',
-    task: 'zero-shot-classification',
-    size: '~260MB',
-    url: 'https://huggingface.co/Xenova/distilbert-base-uncased-mnli'
   }
+  // Note: relationExtraction reuses classifier model
 };
 
 const state = {
@@ -225,7 +223,7 @@ async function performClassification(text) {
     // Get ontology classes for classification
     const classLabels = state.useExistingClassesOnly 
       ? state.ontology.classes.map(c => c.label || c.name)
-      : [...state.ontology.classes.map(c => c.label || c.name), 'Article', 'Document', 'Event', 'Location', 'Topic'];
+      : [...state.ontology.classes.map(c => c.label || c.name), ...ADDITIONAL_CLASS_LABELS];
     
     // Classify text against ontology classes
     const result = await state.classifierPipeline(text, classLabels, {
