@@ -8,6 +8,8 @@ const ONTOLOGY_URL = "/ontology/ontology.json";
 
 // Configuration constants
 const CONFIDENCE_THRESHOLD = 0.1; // Minimum confidence score for displaying results
+const EXPORT_TEXT_PREVIEW_LENGTH = 100; // Characters to include in export preview
+const EXPORT_METADATA_LENGTH = 200; // Characters for export metadata
 
 // Additional class labels for new class detection mode
 const ADDITIONAL_CLASS_LABELS = ['Article', 'Document', 'Event', 'Location', 'Topic'];
@@ -118,7 +120,7 @@ async function showModelConsentModal(modelInfo) {
 }
 
 async function initializeModels() {
-  if (state.nerPipeline && state.classifierPipeline && state.relationPipeline) {
+  if (state.nerPipeline && state.classifierPipeline) {
     return;
   }
 
@@ -146,7 +148,7 @@ async function initializeModels() {
       
       setStatus("Loading Zero-Shot Classification model...");
       state.classifierPipeline = await pipeline(MODEL_CONFIG.classifier.task, MODEL_CONFIG.classifier.name);
-      // Reuse for relationship extraction
+      // Reuse classifier for relationship extraction (same model, same task)
       state.relationPipeline = state.classifierPipeline;
     }
 
@@ -491,13 +493,15 @@ function exportResults() {
   // Add entities as nodes
   Object.keys(results.ontologyEntities).forEach(ontologyClass => {
     results.ontologyEntities[ontologyClass].forEach(entity => {
-      const nodeId = `extracted-${ontologyClass.toLowerCase()}-${nodeIdCounter++}`;
+      // Sanitize class name for ID generation
+      const sanitizedClass = ontologyClass.toLowerCase().replace(/[^a-z0-9]/g, '-');
+      const nodeId = `extracted-${sanitizedClass}-${nodeIdCounter++}`;
       nodes.push({
         id: nodeId,
         class: ontologyClass,
         properties: {
           name: entity.word,
-          extractedFrom: results.text.substring(0, 100) + '...',
+          extractedFrom: results.text.substring(0, EXPORT_TEXT_PREVIEW_LENGTH) + '...',
           confidence: entity.score,
           extractedAt: results.timestamp
         }
@@ -510,7 +514,7 @@ function exportResults() {
     metadata: {
       exportedAt: new Date().toISOString(),
       source: 'SintOlogy Text Analysis',
-      textAnalyzed: results.text.substring(0, 200) + (results.text.length > 200 ? '...' : '')
+      textAnalyzed: results.text.substring(0, EXPORT_METADATA_LENGTH) + (results.text.length > EXPORT_METADATA_LENGTH ? '...' : '')
     },
     nodes,
     edges,
