@@ -4,18 +4,31 @@ const ONTOLOGY_URL = "/ontology/ontology.json";
 // Import Transformers.js dynamically
 let transformers = null;
 let qaPipeline = null;
+let transformersPromise = null;
 
 async function loadTransformers() {
-  if (!transformers) {
+  if (transformers) {
+    return transformers;
+  }
+  
+  if (transformersPromise) {
+    return transformersPromise;
+  }
+  
+  transformersPromise = (async () => {
     try {
       transformers = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
       transformers.env.allowRemoteModels = true;
       transformers.env.allowLocalModels = false;
+      return transformers;
     } catch (error) {
       console.error("Failed to load Transformers.js:", error);
+      transformersPromise = null;
+      throw error;
     }
-  }
-  return transformers;
+  })();
+  
+  return transformersPromise;
 }
 
 const palette = [
@@ -604,6 +617,7 @@ function buildContextFromGraph() {
   }
   
   let context = "The following entities are in the current view:\n\n";
+  const MAX_CONTEXT_LENGTH = 2000; // Limit context to avoid exceeding model input limits
   
   // Group nodes by class
   const nodesByClass = {};
@@ -616,8 +630,16 @@ function buildContextFromGraph() {
   
   // Build context for each class
   Object.keys(nodesByClass).forEach(className => {
+    if (context.length > MAX_CONTEXT_LENGTH) {
+      return;
+    }
+    
     context += `${className} entities:\n`;
     nodesByClass[className].forEach(node => {
+      if (context.length > MAX_CONTEXT_LENGTH) {
+        return;
+      }
+      
       const label = nodeLabel(node);
       const props = node.properties || {};
       const propText = Object.entries(props)
@@ -632,19 +654,29 @@ function buildContextFromGraph() {
     context += '\n';
   });
   
-  // Add relationship information
-  const nodeIds = new Set(nodes.map(n => n.id));
-  const edges = filteredEdges(nodeIds);
+  // Add relationship information if space allows
+  if (context.length < MAX_CONTEXT_LENGTH) {
+    const nodeIds = new Set(nodes.map(n => n.id));
+    const edges = filteredEdges(nodeIds);
+    
+    if (edges.length > 0) {
+      context += "Relationships:\n";
+      edges.forEach(edge => {
+        if (context.length > MAX_CONTEXT_LENGTH) {
+          return;
+        }
+        const fromNode = nodeById(edge.from);
+        const toNode = nodeById(edge.to);
+        if (fromNode && toNode) {
+          context += `- ${nodeLabel(fromNode)} ${edge.type} ${nodeLabel(toNode)}\n`;
+        }
+      });
+    }
+  }
   
-  if (edges.length > 0) {
-    context += "Relationships:\n";
-    edges.forEach(edge => {
-      const fromNode = nodeById(edge.from);
-      const toNode = nodeById(edge.to);
-      if (fromNode && toNode) {
-        context += `- ${nodeLabel(fromNode)} ${edge.type} ${nodeLabel(toNode)}\n`;
-      }
-    });
+  // Truncate if still too long
+  if (context.length > MAX_CONTEXT_LENGTH) {
+    context = context.substring(0, MAX_CONTEXT_LENGTH) + "\n...(truncated)";
   }
   
   return context;

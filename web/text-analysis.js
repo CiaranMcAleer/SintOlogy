@@ -147,7 +147,6 @@ function mapEntitiesToOntology(entities) {
     ORGANIZATION: 'Organisation',
     // Note: Location entities don't have a direct ontology class mapping
     // LOC and LOCATION are kept as-is for now
-    MISC: null  // Miscellaneous doesn't map directly
   };
 
   const ontologyEntities = {};
@@ -255,7 +254,7 @@ function renderOntologyMapping(entities, classification) {
             p.domain && p.domain.includes(ontologyClass.name)
           );
           
-          const propNames = properties.map(p => escapeHtml(p.name)).join(', ');
+          const propNames = properties.map(p => escapeHtml(p.name || '')).filter(n => n).join(', ');
           html += `<li><strong>${escapeHtml(label)}</strong> (${confidence}%)`;
           if (propNames) {
             html += `<br/><span class="properties">Properties: ${propNames}</span>`;
