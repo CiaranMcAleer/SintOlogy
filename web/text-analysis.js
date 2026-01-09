@@ -81,9 +81,21 @@ function consolidateEntityToken(entityType, item, entities) {
   // - 'B-' prefix indicates beginning of entity
   // - 'I-' prefix indicates inside/continuation of entity
   // - '##' prefix indicates subword token
+  
+  if (!entities[entityType] || entities[entityType].length === 0) {
+    // First entity of this type
+    entities[entityType].push({
+      word: item.word.replace('##', ''),
+      score: item.score,
+      start: item.start,
+      end: item.end
+    });
+    return;
+  }
+  
   const lastEntity = entities[entityType][entities[entityType].length - 1];
   
-  if (lastEntity && item.entity.startsWith('I-') && item.start === lastEntity.end) {
+  if (item.entity.startsWith('I-') && item.start === lastEntity.end) {
     // Continuation of previous entity - merge tokens
     lastEntity.word += item.word.replace('##', '');
     lastEntity.end = item.end;
@@ -139,12 +151,14 @@ async function performClassification(text) {
 }
 
 function mapEntitiesToOntology(entities) {
+  // Map NER entity types to ontology classes
+  // Note: Both British and American spellings supported for entity recognition
   const mapping = {
     PER: 'Person',
     PERSON: 'Person',
     ORG: 'Organisation',
     ORGANISATION: 'Organisation',
-    ORGANIZATION: 'Organisation',
+    ORGANIZATION: 'Organisation',  // American spelling variant
     // Note: Location entities don't have a direct ontology class mapping
     // LOC and LOCATION are kept as-is for now
   };
