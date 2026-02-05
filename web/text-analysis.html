@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Text Analysis - SintOlogy</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">SintOlogy</p>
+        <h1>AI-Powered Text Analysis</h1>
+        <p class="lede">Extract entities and relationships from text using AI.</p>
+      </div>
+      <nav class="nav-links">
+        <a href="index.html">← Back to Explorer</a>
+      </nav>
+    </header>
+
+    <section class="controls">
+      <div class="status" id="status">Ready. Paste text below to analyze.</div>
+      <div class="control-buttons">
+        <button id="classModeToggle" class="clear-btn" title="Toggle between existing and new class detection">
+          Existing Classes Only
+        </button>
+        <button id="exportBtn" class="clear-btn" title="Export analysis results">
+          Export Results
+        </button>
+      </div>
+    </section>
+
+    <section class="content">
+      <div class="text-input-panel">
+        <h2>Input Text</h2>
+        <textarea id="inputText" placeholder="Paste your text here for analysis..." rows="10"></textarea>
+        <div class="button-group">
+          <button id="analyzeBtn" class="primary-btn">Analyze Text</button>
+          <button id="clearBtn" class="clear-btn">Clear</button>
+        </div>
+      </div>
+
+      <div class="results-panel">
+        <div class="results-section">
+          <h2>Named Entities</h2>
+          <div id="entitiesResult" class="result-box">
+            <p class="placeholder">Entities will appear here after analysis.</p>
+          </div>
+        </div>
+
+        <div class="results-section">
+          <h2>Relationship Classification</h2>
+          <div id="relationshipsResult" class="result-box">
+            <p class="placeholder">Relationship classifications will appear here after analysis.</p>
+          </div>
+        </div>
+
+        <div class="results-section">
+          <h2>Ontology Mapping</h2>
+          <div id="ontologyMapping" class="result-box">
+            <p class="placeholder">Ontology class mappings will appear here after analysis.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="text-analysis.js"></script>
+</body>
+</html>

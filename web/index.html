@@ -14,6 +14,9 @@
         <h1>Ontology-Guided OSINT Graph</h1>
         <p class="lede">Explore entities and relationships driven entirely by the current ontology.</p>
       </div>
+      <nav class="nav-links">
+        <a href="text-analysis.html">AI Text Analysis →</a>
+      </nav>
       <div class="status" id="status"></div>
     </header>
 
@@ -29,6 +32,11 @@
       <div class="search">
         <label for="searchInput">Search</label>
         <input id="searchInput" type="search" placeholder="Type to filter nodes" />
+      </div>
+      <div class="qa-container">
+        <label for="qaInput">AI Q&A</label>
+        <input id="qaInput" type="text" placeholder="Ask a question about the data" />
+        <button id="askBtn" class="ask-btn">Ask</button>
       </div>
       <div class="depth">
         <label for="depthRange">Depth</label>
@@ -53,6 +61,16 @@
         <button class="clear-btn" id="closeOntology">Close</button>
       </div>
       <pre id="ontologyContent"></pre>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="qaModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Q&A Result</h2>
+        <button class="clear-btn" id="closeQA">Close</button>
+      </div>
+      <div id="qaResult"></div>
     </div>
   </div>
 
