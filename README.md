@@ -66,9 +66,15 @@ python3 scripts/ingest.py --load data/synthetic.json --non-interactive
 
 ### 3) Serve the web UI
 ```bash
+# Using the provided serve script
 python3 scripts/serve.py
+
+# OR using Python's built-in HTTP server from project root
+python3 -m http.server 8080
+# Then open http://localhost:8080/web/
 ```
-Open `http://localhost:8000/web/`.
+
+**Important**: The web server must be started from the project root directory so that the web app can access `/data/graph.json` and `/ontology/ontology.json`.
 
 #### AI Features
 The web UI includes AI-powered features using [Transformers.js](https://huggingface.co/docs/transformers.js):

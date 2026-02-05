@@ -1,8 +1,9 @@
-import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+// Text Analysis now runs in a Web Worker to prevent browser freezing
+// Models are loaded in background thread: text-analysis-worker.js
 
-// Configure to use local models (avoid CORS issues)
-env.allowRemoteModels = true;
-env.allowLocalModels = false;
+// Web Worker state
+let textAnalysisWorker = null;
+let workerReady = false;
 
 const ONTOLOGY_URL = "/ontology/ontology.json";
 
@@ -33,9 +34,6 @@ const MODEL_CONFIG = {
 
 const state = {
   ontology: null,
-  nerPipeline: null,
-  classifierPipeline: null,
-  relationPipeline: null,
   isLoading: false,
   useExistingClassesOnly: true, // Toggle for existing vs new classes
   lastAnalysisResults: null // Store results for export
@@ -78,13 +76,14 @@ async function showModelConsentModal(modelInfo) {
           <h2>Load AI Model</h2>
         </div>
         <div class="modal-body">
-          <p>This feature requires downloading an AI model:</p>
+          <p>This feature requires downloading AI models:</p>
           <ul style="margin: 16px 0; padding-left: 24px;">
             <li><strong>Model:</strong> ${modelInfo.name}</li>
             <li><strong>Size:</strong> ${modelInfo.size}</li>
             <li><strong>Task:</strong> ${modelInfo.task}</li>
           </ul>
-          <p>The model will be downloaded once and cached in your browser for future use.</p>
+          <p>The models will be downloaded once and cached in your browser for future use.</p>
+          <p><strong>Note:</strong> Models run in a background thread to keep the interface responsive.</p>
           <p style="margin-top: 12px;">
             <a href="${modelInfo.url}" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">
               View model card on Hugging Face →
@@ -100,61 +99,116 @@ async function showModelConsentModal(modelInfo) {
     
     document.body.appendChild(modal);
     
+    // Helper to safely remove modal
+    const removeModal = () => {
+      try {
+        if (modal && modal.parentNode === document.body) {
+          document.body.removeChild(modal);
+        }
+      } catch (e) {
+        console.warn('Modal already removed:', e);
+      }
+    };
+    
     document.getElementById('cancelModel').onclick = () => {
-      document.body.removeChild(modal);
+      removeModal();
       resolve(false);
     };
     
     document.getElementById('acceptModel').onclick = () => {
-      document.body.removeChild(modal);
+      removeModal();
       resolve(true);
     };
     
     modal.onclick = (e) => {
       if (e.target === modal) {
-        document.body.removeChild(modal);
+        removeModal();
         resolve(false);
       }
     };
   });
 }
 
+async function initWorker() {
+  if (workerReady) {
+    return;
+  }
+  
+  if (!textAnalysisWorker) {
+    // Ask for consent before initializing worker
+    const consent = await showModelConsentModal({
+      name: 'NER + Classification Models',
+      size: '~680MB total (NER: ~420MB, Classifier: ~260MB)',
+      task: 'Entity extraction and zero-shot classification',
+      url: 'https://huggingface.co/Xenova'
+    });
+    
+    if (!consent) {
+      throw new Error("User declined model download");
+    }
+    
+    setStatus("Initializing Web Worker...");
+    
+    // Create worker
+    textAnalysisWorker = new Worker('/web/text-analysis-worker.js', { type: 'module' });
+    
+    // Set up message handler
+    textAnalysisWorker.addEventListener('message', (event) => {
+      const { type, message } = event.data;
+      
+      if (type === 'status') {
+        setStatus(message);
+      } else if (type === 'ready') {
+        workerReady = true;
+        setStatus("Models loaded. Ready to analyze text.");
+        analyzeBtn.disabled = false;
+      } else if (type === 'error') {
+        console.error('Worker error:', event.data.error);
+        setStatus(`Error: ${event.data.error}`);
+        analyzeBtn.disabled = false;
+      }
+    });
+    
+    // Initialize models in worker
+    textAnalysisWorker.postMessage({
+      type: 'init',
+      data: {
+        nerModel: MODEL_CONFIG.ner.name,
+        classifierModel: MODEL_CONFIG.classifier.name
+      }
+    });
+  }
+  
+  // Wait for worker to be ready
+  return new Promise((resolve, reject) => {
+    const checkReady = setInterval(() => {
+      if (workerReady) {
+        clearInterval(checkReady);
+        resolve();
+      }
+    }, 100);
+    
+    // Timeout after 5 minutes
+    setTimeout(() => {
+      clearInterval(checkReady);
+      reject(new Error('Worker initialization timeout'));
+    }, 300000);
+  });
+}
+
 async function initializeModels() {
-  if (state.nerPipeline && state.classifierPipeline) {
+  if (workerReady) {
     return;
   }
 
   try {
     state.isLoading = true;
     analyzeBtn.disabled = true;
-
-    // Initialize NER pipeline for entity extraction
-    if (!state.nerPipeline) {
-      const consent = await showModelConsentModal(MODEL_CONFIG.ner);
-      if (!consent) {
-        throw new Error("User declined model download");
-      }
-      
-      setStatus("Loading Named Entity Recognition model...");
-      state.nerPipeline = await pipeline(MODEL_CONFIG.ner.task, MODEL_CONFIG.ner.name);
-    }
-
-    // Initialize zero-shot classification for relationship/class classification
-    if (!state.classifierPipeline) {
-      const consent = await showModelConsentModal(MODEL_CONFIG.classifier);
-      if (!consent) {
-        throw new Error("User declined model download");
-      }
-      
-      setStatus("Loading Zero-Shot Classification model...");
-      state.classifierPipeline = await pipeline(MODEL_CONFIG.classifier.task, MODEL_CONFIG.classifier.name);
-      // Reuse classifier for relationship extraction (same model, same task)
-      state.relationPipeline = state.classifierPipeline;
-    }
+    
+    await initWorker();
 
     state.isLoading = false;
     analyzeBtn.disabled = false;
-    setStatus("Models loaded. Ready to analyze text.");
   } catch (error) {
     console.error("Error loading models:", error);
     setStatus(`Error loading models: ${error.message}`);
@@ -167,7 +221,8 @@ function consolidateEntityToken(entityType, item, entities) {
   // Handle BERT tokenization patterns:
   // - 'B-' prefix indicates beginning of entity
   // - 'I-' prefix indicates inside/continuation of entity
-  // - '##' prefix indicates subword token
+  // - '##' prefix indicates subword token (no space needed)
+  // - Regular tokens need spaces between them
   
   if (!entities[entityType] || entities[entityType].length === 0) {
     // First entity of this type
@@ -184,7 +239,10 @@ function consolidateEntityToken(entityType, item, entities) {
   
   if (item.entity.startsWith('I-') && item.start === lastEntity.end) {
     // Continuation of previous entity - merge tokens
-    lastEntity.word += item.word.replace('##', '');
+    // Add space unless this is a subword token (starts with ##)
+    const isSubword = item.word.startsWith('##');
+    const cleanWord = item.word.replace('##', '');
+    lastEntity.word += isSubword ? cleanWord : ' ' + cleanWord;
     lastEntity.end = item.end;
     lastEntity.score = (lastEntity.score + item.score) / 2;
   } else {
@@ -198,93 +256,267 @@ function consolidateEntityToken(entityType, item, entities) {
   }
 }
 
-async function performNER(text) {
-  try {
-    const result = await state.nerPipeline(text);
-    
-    // Group entities by type
-    const entities = {};
-    result.forEach(item => {
-      const entityType = item.entity.replace('B-', '').replace('I-', '');
-      if (!entities[entityType]) {
-        entities[entityType] = [];
-      }
-      
-      consolidateEntityToken(entityType, item, entities);
-    });
-
+function mergeAdjacentFragments(entities, originalText, entityType) {
+  // Merge entities that are very close together and likely fragments of the same entity
+  // e.g., "C", "iara", "n McAleer" -> "Ciaran McAleer"
+  // e.g., "Ciaran", "McAleer" -> "Ciaran McAleer" (for PER type)
+  // e.g., "Trustie", "Labs" -> "Trustie Labs" (for ORG type)
+  
+  if (entities.length <= 1) {
     return entities;
-  } catch (error) {
-    console.error("Error in NER:", error);
-    throw error;
   }
+  
+  const merged = [];
+  let current = entities[0];
+  
+  for (let i = 1; i < entities.length; i++) {
+    const next = entities[i];
+    
+    // Check if entities are adjacent or very close
+    const gap = next.start - current.end;
+    
+    // Merge if entities are adjacent AND look like they belong together:
+    const isAdjacent = gap <= 2;
+    const currentIsFragment = current.word.length <= 2;
+    const nextIsFragment = next.word.length <= 2;
+    const bothAreShort = current.word.length <= 4 && next.word.length <= 4;
+    
+    // For person names and organizations, be more aggressive about merging
+    // Names like "Ciaran McAleer" or "Trustie Labs" should be merged
+    const isNameLikeType = entityType && (
+      entityType.toLowerCase() === 'per' || 
+      entityType.toLowerCase() === 'person' ||
+      entityType.toLowerCase() === 'org' ||
+      entityType.toLowerCase() === 'organisation' ||
+      entityType.toLowerCase() === 'organization'
+    );
+    
+    const looksLikeMultiWordName = isNameLikeType && gap === 1 && 
+                                   current.word.length <= 20 && next.word.length <= 20 &&
+                                   /^[A-Z]/.test(current.word) && /^[A-Z]/.test(next.word); // Both start with capital
+    
+    const shouldMerge = isAdjacent && (currentIsFragment || nextIsFragment || bothAreShort || looksLikeMultiWordName);
+    
+    if (shouldMerge) {
+      // Extract the actual text between entities from original text
+      const actualText = originalText.substring(current.start, next.end);
+      
+      // Merge the entities
+      current = {
+        word: actualText,
+        score: (current.score + next.score) / 2,
+        start: current.start,
+        end: next.end
+      };
+    } else {
+      // Not adjacent enough, save current and move to next
+      merged.push(current);
+      current = next;
+    }
+  }
+  
+  // Don't forget the last entity
+  merged.push(current);
+  
+  return merged;
+}
+
+async function performNER(text) {
+  if (!workerReady) {
+    throw new Error('Worker not ready');
+  }
+  
+  return new Promise((resolve, reject) => {
+    const handleResult = (event) => {
+      const { type, result, error } = event.data;
+      
+      if (type === 'ner-result') {
+        textAnalysisWorker.removeEventListener('message', handleResult);
+        
+        // Calculate start/end positions if not provided by the model
+        // Some models only provide index, so we need to calculate actual text positions
+        let currentPosition = 0;
+        result.forEach((item, idx) => {
+          if (!item.start || !item.end) {
+            // Find this token in the original text starting from currentPosition
+            const cleanWord = item.word.replace('##', '');
+            const searchStart = currentPosition;
+            
+            // Search for the word in the remaining text
+            let foundIndex = text.indexOf(cleanWord, searchStart);
+            
+            // If not found, try case-insensitive search
+            if (foundIndex === -1) {
+              const lowerText = text.toLowerCase();
+              const lowerWord = cleanWord.toLowerCase();
+              foundIndex = lowerText.indexOf(lowerWord, searchStart);
+            }
+            
+            if (foundIndex !== -1) {
+              item.start = foundIndex;
+              item.end = foundIndex + cleanWord.length;
+              currentPosition = item.end;
+            } else {
+              // Fallback: estimate based on previous token
+              item.start = currentPosition;
+              item.end = currentPosition + cleanWord.length;
+              currentPosition = item.end + 1; // +1 for space
+            }
+          }
+        });
+        
+        // Group entities by type
+        const entities = {};
+        result.forEach(item => {
+          const entityType = item.entity.replace('B-', '').replace('I-', '');
+          if (!entities[entityType]) {
+            entities[entityType] = [];
+          }
+          
+          consolidateEntityToken(entityType, item, entities);
+        });
+        
+        // Post-process: merge adjacent entities that are likely fragments of the same entity
+        Object.keys(entities).forEach(entityType => {
+          entities[entityType] = mergeAdjacentFragments(entities[entityType], text, entityType);
+        });
+        
+        resolve(entities);
+      } else if (type === 'error') {
+        textAnalysisWorker.removeEventListener('message', handleResult);
+        reject(new Error(error));
+      }
+    };
+    
+    textAnalysisWorker.addEventListener('message', handleResult);
+    
+    textAnalysisWorker.postMessage({
+      type: 'ner',
+      data: { text }
+    });
+  });
 }
 
 async function performClassification(text) {
-  try {
-    // Get ontology classes for classification
-    const classLabels = state.useExistingClassesOnly 
-      ? state.ontology.classes.map(c => c.label || c.name)
-      : [...state.ontology.classes.map(c => c.label || c.name), ...ADDITIONAL_CLASS_LABELS];
-    
-    // Classify text against ontology classes
-    const result = await state.classifierPipeline(text, classLabels, {
-      multi_label: true
-    });
-
-    return result;
-  } catch (error) {
-    console.error("Error in classification:", error);
-    throw error;
+  if (!workerReady) {
+    throw new Error('Worker not ready');
   }
+  
+  // Get ontology classes for classification
+  const classLabels = state.useExistingClassesOnly 
+    ? state.ontology.classes.map(c => c.label || c.name)
+    : [...state.ontology.classes.map(c => c.label || c.name), ...ADDITIONAL_CLASS_LABELS];
+  
+  return new Promise((resolve, reject) => {
+    const handleResult = (event) => {
+      const { type, result, error } = event.data;
+      
+      if (type === 'classify-result') {
+        textAnalysisWorker.removeEventListener('message', handleResult);
+        resolve(result);
+      } else if (type === 'error') {
+        textAnalysisWorker.removeEventListener('message', handleResult);
+        reject(new Error(error));
+      }
+    };
+    
+    textAnalysisWorker.addEventListener('message', handleResult);
+    
+    textAnalysisWorker.postMessage({
+      type: 'classify',
+      data: { 
+        text, 
+        labels: classLabels,
+        options: { multi_label: true }
+      }
+    });
+  });
 }
 
 async function extractRelationships(text, entities) {
-  try {
-    // Get relationship types from ontology
-    const relationshipTypes = state.ontology.properties
-      .filter(p => p.kind === 'object')
-      .map(p => p.name);
-    
-    if (relationshipTypes.length === 0) {
-      return null;
-    }
-    
-    // Use zero-shot classification to identify potential relationships
-    const result = await state.relationPipeline(text, relationshipTypes, {
-      multi_label: true
-    });
-    
-    return result;
-  } catch (error) {
-    console.error("Error in relationship extraction:", error);
+  if (!workerReady) {
+    throw new Error('Worker not ready');
+  }
+  
+  // Get relationship types from ontology
+  const relationshipTypes = state.ontology.properties
+    .filter(p => p.kind === 'object')
+    .map(p => p.name);
+  
+  if (relationshipTypes.length === 0) {
     return null;
   }
+  
+  return new Promise((resolve, reject) => {
+    const handleResult = (event) => {
+      const { type, result, error } = event.data;
+      
+      if (type === 'classify-result') {
+        textAnalysisWorker.removeEventListener('message', handleResult);
+        resolve(result);
+      } else if (type === 'error') {
+        textAnalysisWorker.removeEventListener('message', handleResult);
+        reject(new Error(error));
+      }
+    };
+    
+    textAnalysisWorker.addEventListener('message', handleResult);
+    
+    textAnalysisWorker.postMessage({
+      type: 'classify',
+      data: { 
+        text, 
+        labels: relationshipTypes,
+        options: { multi_label: true }
+      }
+    });
+  });
 }
 
-function mapEntitiesToOntology(entities) {
-  // Map NER entity types to ontology classes
-  // Note: Both British and American spellings supported for entity recognition
-  const mapping = {
-    PER: 'Person',
-    PERSON: 'Person',
-    ORG: 'Organisation',
-    ORGANISATION: 'Organisation',
-    ORGANIZATION: 'Organisation',  // American spelling variant
-    // Note: Location entities don't have a direct ontology class mapping
-    // LOC and LOCATION are kept as-is for now
-  };
-
+function mapEntitiesToOntology(entities, classification) {
+  // Map NER entities to ontology classes using zero-shot classification results
+  // This approach is ontology-agnostic - no hardcoded class names
+  
+  if (!classification || !classification.labels || !state.ontology) {
+    return {};
+  }
+  
   const ontologyEntities = {};
   
+  // Get top-scoring ontology classes from classification
+  // These represent what the AI thinks are the most relevant ontology classes for the text
+  const relevantClasses = classification.labels
+    .map((label, idx) => ({ label, score: classification.scores[idx] }))
+    .filter(c => c.score > CONFIDENCE_THRESHOLD)
+    .slice(0, 10); // Top 10 classes
+  
+  // For each NER entity type, try to find a matching ontology class
   Object.keys(entities).forEach(entityType => {
-    const ontologyClass = mapping[entityType.toUpperCase()];
-    if (ontologyClass) {
-      if (!ontologyEntities[ontologyClass]) {
-        ontologyEntities[ontologyClass] = [];
+    const items = entities[entityType];
+    if (items.length === 0) return;
+    
+    // Try to find matching ontology class by fuzzy name matching
+    // Look for classes whose names are similar to the entity type
+    const entityTypeNormalized = entityType.toLowerCase().replace(/[^a-z]/g, '');
+    
+    // First, check if any relevant ontology class name matches the entity type
+    let matchedClass = relevantClasses.find(c => {
+      const classNameNormalized = c.label.toLowerCase().replace(/[^a-z]/g, '');
+      // Check for similarity (contains, starts with, ends with)
+      return classNameNormalized.includes(entityTypeNormalized) || 
+             entityTypeNormalized.includes(classNameNormalized) ||
+             (entityTypeNormalized.length > 3 && classNameNormalized.startsWith(entityTypeNormalized.substring(0, 3)));
+    });
+    
+    // If found a match, use it
+    if (matchedClass) {
+      if (!ontologyEntities[matchedClass.label]) {
+        ontologyEntities[matchedClass.label] = [];
       }
-      ontologyEntities[ontologyClass].push(...entities[entityType]);
+      ontologyEntities[matchedClass.label].push(...items);
     }
+    // Otherwise, keep the NER entity type as-is (don't force incorrect mappings)
+    // The zero-shot classifier already provides ontology class suggestions
   });
 
   return ontologyEntities;
@@ -455,7 +687,7 @@ async function analyzeText() {
     renderClassification(classification, relationships);
     
     // Map to ontology
-    const ontologyEntities = mapEntitiesToOntology(entities);
+    const ontologyEntities = mapEntitiesToOntology(entities, classification);
     renderOntologyMapping(ontologyEntities, classification);
     
     // Store results for export

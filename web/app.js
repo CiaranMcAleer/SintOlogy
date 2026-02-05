@@ -1,47 +1,169 @@
 const DATA_URL = "/data/graph.json";
 const ONTOLOGY_URL = "/ontology/ontology.json";
 
-// Import Transformers.js dynamically - using proper pipeline import as per docs
-let pipeline = null;
-let env = null;
-let qaPipeline = null;
-let transformersPromise = null;
+// Web Worker for Q&A model
+let qaWorker = null;
+let workerReady = false;
+let workerInitPromise = null;
 
 // Model configuration for easy future updates
 const MODEL_CONFIG = {
   qa: {
-    name: 'Xenova/distilbert-base-cased-distilled-squad',
-    task: 'question-answering',
-    size: '~250MB',
-    url: 'https://huggingface.co/Xenova/distilbert-base-cased-distilled-squad'
+    name: 'HuggingFaceTB/SmolLM2-135M-Instruct',
+    task: 'text-generation',
+    size: '~120MB (quantized)',
+    url: 'https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct',
+    type: 'generative' // 'generative' vs 'extractive' - determines answer processing
   }
 };
 
-async function loadTransformers() {
-  if (pipeline) {
-    return { pipeline, env };
+async function showModelConsentModal(modelInfo) {
+  return new Promise((resolve) => {
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Load AI Model</h2>
+        </div>
+        <div class="modal-body">
+          <p>This feature requires downloading an AI model:</p>
+          <ul style="margin: 16px 0; padding-left: 24px;">
+            <li><strong>Model:</strong> ${modelInfo.name}</li>
+            <li><strong>Size:</strong> ${modelInfo.size}</li>
+            <li><strong>Task:</strong> ${modelInfo.task}</li>
+          </ul>
+          <p>The model will be downloaded once and cached in your browser for future use.</p>
+          <p style="margin-top: 12px;">
+            <a href="${modelInfo.url}" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">
+              View model card on Hugging Face →
+            </a>
+          </p>
+          <p style="margin-top: 12px; padding: 12px; background: var(--bg-dark); border-radius: 4px;">
+            <strong>Note:</strong> The model runs in a background thread to keep the UI responsive.
+          </p>
+        </div>
+        <div class="button-group" style="margin-top: 24px; display: flex; gap: 12px; justify-content: flex-end;">
+          <button class="clear-btn" id="cancelModel">Cancel</button>
+          <button class="primary-btn" id="acceptModel">Download and Continue</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    document.getElementById('cancelModel').onclick = () => {
+      document.body.removeChild(modal);
+      resolve(false);
+    };
+    
+    document.getElementById('acceptModel').onclick = () => {
+      document.body.removeChild(modal);
+      resolve(true);
+    };
+    
+    modal.onclick = (e) => {
+      if (e.target === modal) {
+        document.body.removeChild(modal);
+        resolve(false);
+      }
+    };
+  });
+}
+
+async function initQAWorker() {
+  if (workerReady) {
+    return;
   }
   
-  if (transformersPromise) {
-    return transformersPromise;
+  if (workerInitPromise) {
+    return workerInitPromise;
   }
   
-  transformersPromise = (async () => {
+  // Show model consent modal
+  const consent = await showModelConsentModal(MODEL_CONFIG.qa);
+  if (!consent) {
+    throw new Error("User declined model download");
+  }
+  
+  workerInitPromise = new Promise((resolve, reject) => {
     try {
-      const module = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
-      pipeline = module.pipeline;
-      env = module.env;
-      env.allowRemoteModels = true;
-      env.allowLocalModels = false;
-      return { pipeline, env };
+      // Create worker
+      qaWorker = new Worker('/web/qa-worker.js', { type: 'module' });
+      
+      // Handle messages from worker
+      qaWorker.onmessage = (event) => {
+        const { type, status, message, result, error } = event.data;
+        
+        switch (type) {
+          case 'status':
+            setStatus(status);
+            break;
+          case 'ready':
+            setStatus(message);
+            workerReady = true;
+            resolve();
+            break;
+          case 'result':
+            // Store result for retrieval
+            qaWorker._lastResult = result;
+            break;
+          case 'error':
+            console.error('Worker error:', error);
+            setStatus(`Error: ${error}`);
+            reject(new Error(error));
+            break;
+        }
+      };
+      
+      qaWorker.onerror = (error) => {
+        console.error('Worker error:', error);
+        reject(error);
+      };
+      
+      // Initialize the model
+      qaWorker.postMessage({
+        type: 'init',
+        data: { modelConfig: MODEL_CONFIG.qa }
+      });
+      
     } catch (error) {
-      console.error("Failed to load Transformers.js:", error);
-      transformersPromise = null;
-      throw error;
+      console.error("Error creating worker:", error);
+      reject(error);
     }
-  })();
+  });
   
-  return transformersPromise;
+  return workerInitPromise;
+}
+
+async function runQAInference(messages, options) {
+  if (!workerReady) {
+    throw new Error('Worker not ready');
+  }
+  
+  return new Promise((resolve, reject) => {
+    // Set up one-time message handler for this inference
+    const handleResult = (event) => {
+      const { type, result, error } = event.data;
+      
+      if (type === 'result') {
+        qaWorker.removeEventListener('message', handleResult);
+        resolve(result);
+      } else if (type === 'error') {
+        qaWorker.removeEventListener('message', handleResult);
+        reject(new Error(error));
+      }
+      // Ignore 'status' messages during inference
+    };
+    
+    qaWorker.addEventListener('message', handleResult);
+    
+    // Send inference request
+    qaWorker.postMessage({
+      type: 'inference',
+      data: { messages, options }
+    });
+  });
 }
 
 async function checkWebGPU() {
@@ -219,16 +341,42 @@ function nodeLabel(node) {
     return "Unknown";
   }
   const props = node.properties || {};
-  return (
-    props.name ||
-    props.fullName ||
-    props.handle ||
-    props.actionType ||
-    props.campaignType ||
-    props.platform ||
-    props.url ||
-    node.id.slice(0, 6)
+  
+  // First try standard naming properties
+  if (props.name) return props.name;
+  if (props.fullName) return props.fullName;
+  if (props.label) return props.label;
+  if (props.title) return props.title;
+  
+  // Then try to find any property that looks like it could be a label
+  // Common patterns: handle, username, identifier, code, etc.
+  const labelLikeProps = Object.keys(props).filter(key => 
+    key.toLowerCase().includes('name') ||
+    key.toLowerCase().includes('title') ||
+    key.toLowerCase().includes('label') ||
+    key.toLowerCase().includes('handle') ||
+    key.toLowerCase().includes('identifier')
   );
+  
+  if (labelLikeProps.length > 0 && props[labelLikeProps[0]]) {
+    return props[labelLikeProps[0]];
+  }
+  
+  // Try type properties as fallback (actionType, campaignType, etc.)
+  const typeProps = Object.keys(props).filter(key => 
+    key.toLowerCase().includes('type')
+  );
+  
+  if (typeProps.length > 0 && props[typeProps[0]]) {
+    return props[typeProps[0]];
+  }
+  
+  // Try platform/url as last resort before ID
+  if (props.platform) return props.platform;
+  if (props.url) return props.url;
+  
+  // Ultimate fallback: use node ID
+  return node.id.slice(0, 8);
 }
 
 function relatedNodeIds() {
@@ -718,75 +866,246 @@ async function initQAPipeline() {
 }
 
 function buildContextFromGraph() {
-  // Build a text context from the current graph data
+  // Build ontology-aware natural language context from current graph data
+  // Uses the loaded ontology schema to intelligently compose prose
+  // Works with ANY ontology - completely generic
+  
   const nodes = filteredNodes();
   
   if (nodes.length === 0) {
     return { context: "No data available. Please adjust filters or load data.", wasTruncated: false };
   }
   
-  let context = "The following entities are in the current view:\n\n";
-  const MAX_CONTEXT_LENGTH = 2000; // Limit context to avoid exceeding model input limits
+  // SmolLM2 supports 2048 tokens ≈ 8000-10000 chars
+  // We reserve ~1000 chars for prompt structure and question
+  // This gives us ~7000 chars for context
+  const MAX_CONTEXT_LENGTH = 7000;
   let wasTruncated = false;
+  const contextParts = [];
   
-  // Group nodes by class
-  const nodesByClass = {};
-  nodes.forEach(node => {
-    if (!nodesByClass[node.class]) {
-      nodesByClass[node.class] = [];
+  // Helper: Format camelCase property names into readable text
+  const formatPropertyKey = (key) => {
+    return key.replace(/([A-Z])/g, ' $1').toLowerCase().trim();
+  };
+  
+  // Helper: Get properties defined for a class from ontology
+  const getClassProperties = (className) => {
+    if (!state.ontology || !state.ontology.properties) return [];
+    return state.ontology.properties.filter(prop => 
+      prop.domain && prop.domain.includes(className)
+    );
+  };
+  
+  // Helper: Determine if property is an object relationship or datatype
+  const getPropertyKind = (propName, className) => {
+    if (!state.ontology || !state.ontology.properties) return 'datatype';
+    const prop = state.ontology.properties.find(p => 
+      p.name === propName && p.domain && p.domain.includes(className)
+    );
+    return prop ? prop.kind : 'datatype';
+  };
+  
+  // Helper: Build rich identity sentence for a node based on its class
+  const buildIdentitySentence = (node) => {
+    const label = nodeLabel(node);
+    const props = node.properties || {};
+    const classProps = getClassProperties(node.class);
+    
+    // Collect key identity components (ontology-agnostic)
+    let role = null;
+    let organization = null;
+    let identityDescriptors = []; // nationality, ideology, etc.
+    
+    // Get identity/descriptor properties (e.g. nationality, ideology, platform, affiliation)
+    // Look for common identity-related property name patterns
+    const identityPropPatterns = ['national', 'origin', 'ideology', 'platform', 'affiliation', 'allegiance'];
+    const identityProps = classProps.filter(p => 
+      p.kind === 'datatype' && 
+      identityPropPatterns.some(pattern => p.name.toLowerCase().includes(pattern))
+    );
+    
+    identityProps.forEach(prop => {
+      if (props[prop.name]) {
+        identityDescriptors.push(props[prop.name]);
+      }
+    });
+    
+    // Get type/category properties (generic pattern matching)
+    const typeProps = classProps.filter(p => 
+      p.kind === 'datatype' && 
+      (p.name.toLowerCase().includes('type') || p.name.toLowerCase().includes('category'))
+    );
+    
+    let types = [];
+    typeProps.forEach(prop => {
+      if (props[prop.name]) {
+        types.push(props[prop.name]);
+      }
+    });
+    
+    // Extract role and organization from relationships (ontology-agnostic approach)
+    const edges = state.graph.edges.filter(e => e.from === node.id);
+    edges.forEach(edge => {
+      const relType = edge.type || edge.label;
+      const targetNode = state.graph.nodes.find(n => n.id === edge.to);
+      if (!targetNode) return;
+      
+      // Find the property definition to understand semantics
+      const propDef = state.ontology.properties.find(p => p.name === relType);
+      
+      if (propDef && propDef.range) {
+        // Check if this relationship points to a "Role" class
+        if (propDef.range.some(r => r.toLowerCase().includes('role'))) {
+          role = nodeLabel(targetNode);
+        }
+        // Check if this relationship points to an "Organisation" class
+        else if (propDef.range.some(r => r.toLowerCase().includes('organis') || r.toLowerCase().includes('organiz') || r.toLowerCase().includes('company') || r.toLowerCase().includes('institution'))) {
+          organization = nodeLabel(targetNode);
+        }
+      }
+    });
+    
+    // Build natural sentence: "Alex Parker is a British Program Lead at Civic Development Council."
+    const parts = [label, "is"];
+    
+    // Add article and identity descriptors if present (nationality, ideology, etc.)
+    if (identityDescriptors.length > 0) {
+      parts.push("a", identityDescriptors.join(" "));
+    } else {
+      parts.push("a");
     }
-    nodesByClass[node.class].push(node);
-  });
+    
+    // Add role or class
+    if (role) {
+      parts.push(role);
+    } else {
+      parts.push(node.class);
+      if (types.length > 0) {
+        parts.push(`(${types.join(", ")})`);
+      }
+    }
+    
+    // Add organization
+    if (organization) {
+      parts.push("at", organization);
+    }
+    
+    return parts.join(" ") + ".";
+  };
   
-  // Build context for each class
-  Object.keys(nodesByClass).forEach(className => {
-    if (context.length > MAX_CONTEXT_LENGTH) {
+  // Helper: Build relationship sentences by following edges
+  const buildRelationshipSentences = (node) => {
+    const label = nodeLabel(node);
+    const sentences = [];
+    const edges = state.graph.edges.filter(e => e.from === node.id);
+    
+    // Group edges by type for better prose
+    const edgesByType = {};
+    edges.forEach(edge => {
+      const relType = edge.type || edge.label || 'relatedTo';
+      if (!edgesByType[relType]) edgesByType[relType] = [];
+      
+      const targetNode = state.graph.nodes.find(n => n.id === edge.to);
+      if (targetNode) {
+        edgesByType[relType].push({
+          label: nodeLabel(targetNode),
+          class: targetNode.class,
+          props: targetNode.properties || {}
+        });
+      }
+    });
+    
+    // Generate sentences for each relationship type
+    Object.keys(edgesByType).forEach(relType => {
+      const targets = edgesByType[relType];
+      if (targets.length === 0) return;
+      
+      const formattedRel = formatPropertyKey(relType);
+      
+      // For relationships to entities with names/descriptions, include extra context
+      const targetDescriptions = targets.map(t => {
+        // Include role descriptions, campaign types, etc. for richer context
+        if (t.props.description) {
+          return `${t.label} (${t.props.description})`;
+        } else if (t.props.name && t.props.name !== t.label) {
+          return `${t.label}`;
+        }
+        return t.label;
+      });
+      
+      sentences.push(`${label} ${formattedRel} ${targetDescriptions.join(", ")}.`);
+    });
+    
+    return sentences;
+  };
+  
+  // Helper: Build property sentences for datatype properties
+  const buildPropertySentences = (node) => {
+    const label = nodeLabel(node);
+    const props = node.properties || {};
+    const sentences = [];
+    const classProps = getClassProperties(node.class);
+    
+    // Skip properties we've already included (name, fullName, type variants, id, label)
+    const skipProps = ['id', 'label', 'name', 'fullName', 'title'];
+    
+    // Get identity property names to skip (already used in identity sentence)
+    const identityPropPatterns = ['national', 'origin', 'ideology', 'platform', 'affiliation', 'allegiance', 'type', 'category'];
+    const identityPropNames = classProps
+      .filter(p => p.kind === 'datatype' && 
+        identityPropPatterns.some(pattern => p.name.toLowerCase().includes(pattern)))
+      .map(p => p.name);
+    
+    // Add remaining datatype properties as facts
+    Object.keys(props).forEach(key => {
+      if (skipProps.includes(key) || identityPropNames.includes(key)) return;
+      if (!props[key]) return;
+      
+      const readableKey = formatPropertyKey(key);
+      
+      // Format dates nicely
+      if (key.includes('date') || key.includes('Date') || key.includes('At')) {
+        sentences.push(`${label} ${readableKey} ${props[key]}.`);
+      } else if (key === 'description') {
+        // Descriptions are often used in relationships, skip standalone
+        return;
+      } else {
+        sentences.push(`${label} has ${readableKey} ${props[key]}.`);
+      }
+    });
+    
+    return sentences;
+  };
+  
+  // Build context for each node
+  nodes.forEach(node => {
+    // Stop if approaching limit
+    if (contextParts.join(" ").length > MAX_CONTEXT_LENGTH - 500) {
       return;
     }
     
-    context += `${className} entities:\n`;
-    nodesByClass[className].forEach(node => {
-      if (context.length > MAX_CONTEXT_LENGTH) {
-        return;
-      }
-      
-      const label = nodeLabel(node);
-      const props = node.properties || {};
-      const propText = Object.entries(props)
-        .map(([key, value]) => `${key}: ${value}`)
-        .join(', ');
-      context += `- ${label}`;
-      if (propText) {
-        context += ` (${propText})`;
-      }
-      context += '\n';
-    });
-    context += '\n';
+    const sentences = [];
+    
+    // 1. Identity sentence
+    sentences.push(buildIdentitySentence(node));
+    
+    // 2. Relationship sentences (most important for QA)
+    sentences.push(...buildRelationshipSentences(node));
+    
+    // 3. Property sentences (additional facts)
+    sentences.push(...buildPropertySentences(node));
+    
+    if (sentences.length > 0) {
+      contextParts.push(sentences.join(" "));
+    }
   });
   
-  // Add relationship information if space allows
-  if (context.length < MAX_CONTEXT_LENGTH) {
-    const nodeIds = new Set(nodes.map(n => n.id));
-    const edges = filteredEdges(nodeIds);
-    
-    if (edges.length > 0) {
-      context += "Relationships:\n";
-      edges.forEach(edge => {
-        if (context.length > MAX_CONTEXT_LENGTH) {
-          return;
-        }
-        const fromNode = nodeById(edge.from);
-        const toNode = nodeById(edge.to);
-        if (fromNode && toNode) {
-          context += `- ${nodeLabel(fromNode)} ${edge.type} ${nodeLabel(toNode)}\n`;
-        }
-      });
-    }
-  }
+  // Join all context
+  let context = contextParts.join(" ");
   
-  // Truncate if still too long
+  // Truncate if necessary
   if (context.length > MAX_CONTEXT_LENGTH) {
-    context = context.substring(0, MAX_CONTEXT_LENGTH) + "\n...(truncated)";
+    context = context.substring(0, MAX_CONTEXT_LENGTH);
     wasTruncated = true;
   }
   
@@ -805,8 +1124,8 @@ async function answerQuestion() {
     askBtn.disabled = true;
     askBtn.textContent = "Processing...";
     
-    // Initialize Q&A pipeline
-    const pipeline = await initQAPipeline();
+    // Initialize Q&A worker
+    await initQAWorker();
     
     // Build context from current graph view
     const { context, wasTruncated } = buildContextFromGraph();
@@ -818,13 +1137,41 @@ async function answerQuestion() {
       setStatus("Answering question...");
     }
     
-    // Get answer
-    const result = await pipeline(question, context);
+    let answer, confidence;
+    
+    // Generative model: Use chat message format for instruction-tuned models
+    const messages = [
+      { 
+        role: "system", 
+        content: "You are a helpful assistant answering questions based on provided context. Answer concisely and accurately using only information from the context. If the answer requires a list, provide all items mentioned in the context."
+      },
+      { 
+        role: "user", 
+        content: `Context:\n${context}\n\nQuestion: ${question}`
+      }
+    ];
+
+    // Run inference in worker (non-blocking)
+    const result = await runQAInference(messages, {
+      max_new_tokens: 200,
+      temperature: 0.3,
+      do_sample: true,
+      top_p: 0.9
+    });
+    
+    // Extract the assistant's response from the chat format
+    answer = result[0].generated_text.at(-1).content;
+    
+    // Generative models don't provide confidence scores
+    confidence = null;
     
     // Display result
-    const confidence = (result.score * 100).toFixed(1);
     const truncationWarning = wasTruncated ? 
       '<p class="warning" style="color: var(--accent); margin-top: 8px;">⚠️ Context was truncated. The answer may not include all available data. Try using filters to narrow down the view.</p>' : '';
+    
+    const confidenceDisplay = confidence !== null ? 
+      `<p class="confidence">Confidence: ${confidence}%</p>` : 
+      `<p class="confidence" style="color: var(--text-muted);">Generative model (no confidence score)</p>`;
     
     qaResult.innerHTML = `
       <div class="qa-result-content">
@@ -832,9 +1179,9 @@ async function answerQuestion() {
         <p class="question">${escapeHtml(question)}</p>
         
         <h3>Answer:</h3>
-        <p class="answer">${escapeHtml(result.answer)}</p>
+        <p class="answer">${escapeHtml(answer)}</p>
         
-        <p class="confidence">Confidence: ${confidence}%</p>
+        ${confidenceDisplay}
         ${truncationWarning}
         
         <details>
